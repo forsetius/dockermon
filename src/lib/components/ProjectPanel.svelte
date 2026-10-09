@@ -13,8 +13,7 @@
   import Toggle from './Toggle.svelte';
 
   let {
-    busyProjectId = null,
-    busyServiceId = null,
+    busy = false,
     lifecycleActionsEnabled,
     logsEnabled,
     locale,
@@ -28,8 +27,7 @@
     project,
     selectedServiceId = null,
   }: {
-    busyProjectId?: string | null;
-    busyServiceId?: string | null;
+    busy?: boolean;
     lifecycleActionsEnabled: boolean;
     logsEnabled: boolean;
     locale: Locale;
@@ -88,7 +86,7 @@
             <label class:enabled={profile.enabled} class="profile-control">
               <input
                 checked={profile.enabled}
-                disabled={busyProjectId === project.id}
+                disabled={busy}
                 onchange={(event) => toggleProfile(profile.name, event.currentTarget.checked)}
                 type="checkbox"
               />
@@ -103,7 +101,7 @@
       <label class="active-control">
         <Toggle
           checked={project.active}
-          disabled={busyProjectId === project.id}
+          disabled={busy}
           label={translate(locale, 'projects.activeToggle', { project: project.name })}
           onchange={onactive}
         />
@@ -113,7 +111,7 @@
       </label>
       <button
         class="primary-button"
-        disabled={!lifecycleActionsEnabled || selectedCount === 0 || busyProjectId === project.id}
+        disabled={!lifecycleActionsEnabled || selectedCount === 0 || busy}
         onclick={() => onprojectaction('start-selected')}
         type="button"
       >
@@ -122,19 +120,14 @@
       </button>
       <button
         class="danger-button"
-        disabled={!lifecycleActionsEnabled || selectedCount === 0 || busyProjectId === project.id}
+        disabled={!lifecycleActionsEnabled || selectedCount === 0 || busy}
         onclick={() => onprojectaction('stop-selected')}
         type="button"
       >
         <Icon name="stop" size={15} />
         {translate(locale, 'action.stopSelected')}
       </button>
-      <ProjectActionsMenu
-        disabled={busyProjectId === project.id}
-        {locale}
-        {onremove}
-        projectName={project.name}
-      />
+      <ProjectActionsMenu disabled={busy} {locale} {onremove} projectName={project.name} />
     </div>
   </header>
 
@@ -146,14 +139,14 @@
           bind:this={selectAllElement}
           checked={allSelected}
           class="selection-checkbox"
-          disabled={includedServices.length === 0 || busyProjectId === project.id}
+          disabled={includedServices.length === 0 || busy}
           onchange={(event) => selectAll(event.currentTarget.checked)}
           type="checkbox"
         />
       </div>
       <ServiceTable
         actionsEnabled={lifecycleActionsEnabled}
-        {busyServiceId}
+        actionsBlocked={busy}
         {locale}
         {logsEnabled}
         onaction={onserviceaction}

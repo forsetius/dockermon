@@ -265,6 +265,11 @@ The desktop sidebar uses 44px rows with 9px corners, muted labels, and a blue-wa
 
 Each project is an expandable, bordered container with its identity on the left and project-scope controls on the right. The active-project control reserves a fixed 124px slot so changing between active and inactive labels never moves the switch. Service rows keep selection, identity, state, metrics, ports, and actions in stable columns; CPU and memory values use tabular numerals aligned to the right. The mobile version converts the same information to labeled row cards without losing actions or metrics.
 
+Lifecycle operations disable only the affected project, so independent projects remain actionable.
+During the Engine-wide stop operation, every lifecycle control is disabled and a compact semantic
+status strip reports preparation or completed/total progress. Its red treatment communicates the
+consequence of the operation, not a failure.
+
 ### Toggle
 
 The toggle is a 42px by 24px pill with a 16px white thumb. Its off state is neutral and bordered; its on state uses the operational blue. The thumb moves 18px with a 180ms emphasized ease, and the hidden checkbox retains focus and accessibility semantics.
@@ -275,7 +280,7 @@ The drawer is the primary inspection surface: a panel header and toolbar above a
 
 ### Loading, Empty, Error, and Toast States
 
-Loading uses panel-shaped skeletons with a restrained 1.3s sweep. Empty and error states center a 58px semantic icon tile, concise copy, and one primary recovery action. Toasts are compact, dismissible overlays; success and error variants alter the border rather than flooding the surface with color.
+Loading uses panel-shaped skeletons with a restrained 1.3s sweep. Empty and error states center a 58px semantic icon tile, concise copy, and one primary recovery action. Toasts are compact, dismissible overlays; success and error variants alter the border rather than flooding the surface with color. A partially successful global stop uses the error variant with a concise count first and a bounded, scrollable list of affected container names below it.
 
 ## Do's and Don'ts
 

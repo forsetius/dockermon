@@ -145,11 +145,37 @@ pub struct RuntimeCapabilities {
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct GlobalStopProgress {
+    pub completed: usize,
+    pub total: usize,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContainerStopFailure {
+    pub code: String,
+    pub container_name: String,
+    pub retryable: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GlobalStopReport {
+    pub failures: Vec<ContainerStopFailure>,
+    pub sequence: u64,
+    pub stopped: usize,
+    pub total: usize,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ApplicationSnapshot {
     pub activity: Vec<ActivityEntry>,
     pub capabilities: RuntimeCapabilities,
     pub connection: ConnectionStatus,
     pub global_stop_in_progress: bool,
+    pub global_stop_progress: Option<GlobalStopProgress>,
+    pub global_stop_report: Option<GlobalStopReport>,
     pub preferences: Preferences,
     pub projects: Vec<ProjectSnapshot>,
     pub standalone_containers: Vec<ServiceSnapshot>,
@@ -436,6 +462,22 @@ impl RuntimeSupervisor for TestRuntimeSupervisor {
                 }
                 RuntimeOperation::StopAll => {
                     state.snapshot.global_stop_in_progress = true;
+                    state.snapshot.global_stop_progress = Some(GlobalStopProgress {
+                        completed: 0,
+                        total: 0,
+                    });
+                    let total = state
+                        .snapshot
+                        .projects
+                        .iter()
+                        .flat_map(|project| &project.services)
+                        .chain(&state.snapshot.standalone_containers)
+                        .filter(|service| service.status.can_stop())
+                        .count();
+                    state.snapshot.global_stop_progress = Some(GlobalStopProgress {
+                        completed: 0,
+                        total,
+                    });
                     for project in &mut state.snapshot.projects {
                         for service in &mut project.services {
                             if service.status.can_stop() {
@@ -449,6 +491,18 @@ impl RuntimeSupervisor for TestRuntimeSupervisor {
                         }
                     }
                     state.snapshot.global_stop_in_progress = false;
+                    state.snapshot.global_stop_progress = None;
+                    let sequence = state
+                        .snapshot
+                        .global_stop_report
+                        .as_ref()
+                        .map_or(1, |report| report.sequence + 1);
+                    state.snapshot.global_stop_report = Some(GlobalStopReport {
+                        failures: Vec::new(),
+                        sequence,
+                        stopped: total,
+                        total,
+                    });
                     activity = Some(("stop-all".to_owned(), "Docker Engine".to_owned()));
                 }
             }
@@ -577,6 +631,8 @@ fn fixture_snapshot() -> ApplicationSnapshot {
         },
         connection: ConnectionStatus::Connected,
         global_stop_in_progress: false,
+        global_stop_progress: None,
+        global_stop_report: None,
         preferences: Preferences {
             language: Locale::system(),
             theme: ThemePreference::System,

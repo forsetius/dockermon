@@ -58,11 +58,31 @@ export interface RuntimeCapabilities {
   logs: boolean;
 }
 
+export interface GlobalStopProgress {
+  completed: number;
+  total: number;
+}
+
+export interface ContainerStopFailure {
+  code: string;
+  containerName: string;
+  retryable: boolean;
+}
+
+export interface GlobalStopReport {
+  failures: ContainerStopFailure[];
+  sequence: number;
+  stopped: number;
+  total: number;
+}
+
 export interface ApplicationSnapshot {
   activity: ActivityEntry[];
   capabilities: RuntimeCapabilities;
   connection: ConnectionStatus;
   globalStopInProgress: boolean;
+  globalStopProgress: GlobalStopProgress | null;
+  globalStopReport: GlobalStopReport | null;
   preferences: Preferences;
   projects: ProjectSnapshot[];
   standaloneContainers: ServiceSnapshot[];

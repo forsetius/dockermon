@@ -6,7 +6,8 @@
 
   let {
     actionsEnabled = true,
-    busyServiceId = null,
+    actionsBlocked = false,
+    busyServiceIds = [],
     locale,
     logsEnabled = true,
     onaction,
@@ -17,7 +18,8 @@
     showBulk = true,
   }: {
     actionsEnabled?: boolean;
-    busyServiceId?: string | null;
+    actionsBlocked?: boolean;
+    busyServiceIds?: readonly string[];
     locale: Locale;
     logsEnabled?: boolean;
     onaction: (service: ServiceSnapshot, action: ServiceAction) => void;
@@ -118,14 +120,21 @@
       </span>
       <span class="row-actions" role="cell">
         <button
-          aria-label={translate(locale, 'action.start', { service: service.name })}
+          aria-label={translate(
+            locale,
+            service.status === 'paused' ? 'action.resume' : 'action.start',
+            { service: service.name },
+          )}
           class="icon-button"
           disabled={!service.included ||
             !actionsEnabled ||
             !canStart(service.status) ||
-            busyServiceId !== null}
-          onclick={() => onaction(service, 'start')}
-          title={translate(locale, 'action.start', { service: service.name })}
+            actionsBlocked ||
+            busyServiceIds.includes(service.id)}
+          onclick={() => onaction(service, service.status === 'paused' ? 'resume' : 'start')}
+          title={translate(locale, service.status === 'paused' ? 'action.resume' : 'action.start', {
+            service: service.name,
+          })}
           type="button"
         >
           <Icon name="play" size={17} />
@@ -136,7 +145,8 @@
           disabled={!service.included ||
             !actionsEnabled ||
             !canStop(service.status) ||
-            busyServiceId !== null}
+            actionsBlocked ||
+            busyServiceIds.includes(service.id)}
           onclick={() => onaction(service, 'stop')}
           title={translate(locale, 'action.stop', { service: service.name })}
           type="button"
@@ -149,7 +159,8 @@
           disabled={!service.included ||
             !actionsEnabled ||
             !canRestart(service.status) ||
-            busyServiceId !== null}
+            actionsBlocked ||
+            busyServiceIds.includes(service.id)}
           onclick={() => onaction(service, 'restart')}
           title={translate(locale, 'action.restart', { service: service.name })}
           type="button"

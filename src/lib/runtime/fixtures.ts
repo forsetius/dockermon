@@ -26,6 +26,8 @@ export function createFixtureSnapshot(): ApplicationSnapshot {
     },
     connection: 'connected',
     globalStopInProgress: false,
+    globalStopProgress: null,
+    globalStopReport: null,
     preferences: {
       language: navigator.language.toLowerCase().startsWith('pl') ? 'pl' : 'en',
       theme: 'system',

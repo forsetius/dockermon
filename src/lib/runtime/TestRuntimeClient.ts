@@ -15,6 +15,7 @@ export type TestScenario = 'ready' | 'empty' | 'error' | 'loading';
 
 interface TestRuntimeOptions {
   capabilities?: Partial<RuntimeCapabilities>;
+  globalStopFailures?: string[];
   latency?: number;
   scenario?: TestScenario;
 }
@@ -26,11 +27,14 @@ export class TestRuntimeClient implements RuntimeClient {
   private readonly latency: number;
   private readonly listeners = new Set<SnapshotListener>();
   private readonly scenario: TestScenario;
+  private readonly globalStopFailures: ReadonlySet<string>;
+  private globalStopSequence = 0;
   private snapshot = createFixtureSnapshot();
 
   constructor(options: TestRuntimeOptions = {}) {
     this.latency = options.latency ?? 180;
     this.scenario = options.scenario ?? 'ready';
+    this.globalStopFailures = new Set(options.globalStopFailures ?? []);
     this.snapshot.capabilities = {
       ...this.snapshot.capabilities,
       ...options.capabilities,
@@ -175,20 +179,46 @@ export class TestRuntimeClient implements RuntimeClient {
   }
 
   async stopAll(): Promise<ApplicationSnapshot> {
-    await delay(this.latency);
     this.snapshot.globalStopInProgress = true;
+    this.snapshot.globalStopReport = null;
+    this.snapshot.globalStopProgress = { completed: 0, total: 0 };
     this.publish();
     await delay(this.latency);
 
-    for (const service of this.allServices()) {
-      if (isServiceRunning(service.status) || service.status === 'paused') {
+    const services = this.allServices().filter(
+      (service) =>
+        isServiceRunning(service.status) ||
+        service.status === 'paused' ||
+        service.status === 'starting',
+    );
+    this.snapshot.globalStopProgress = { completed: 0, total: services.length };
+    this.publish();
+    for (const [index, service] of services.entries()) {
+      if (!this.globalStopFailures.has(service.id)) {
         service.status = 'stopped';
         service.cpuPercent = null;
         service.memoryBytes = null;
       }
+      this.snapshot.globalStopProgress = { completed: index + 1, total: services.length };
+      this.publish();
     }
 
     this.snapshot.globalStopInProgress = false;
+    this.snapshot.globalStopProgress = null;
+    this.globalStopSequence += 1;
+    const failures = services
+      .filter((service) => this.globalStopFailures.has(service.id))
+      .map((service) => ({
+        code: 'CONTAINER_STOP_FAILED',
+        containerName: service.name,
+        retryable: true,
+      }));
+    this.snapshot.globalStopReport = {
+      failures,
+      sequence: this.globalStopSequence,
+      stopped: services.length - failures.length,
+      total: services.length,
+    };
     this.recordActivity('stop-all', 'Docker Engine');
     return this.publish();
   }
