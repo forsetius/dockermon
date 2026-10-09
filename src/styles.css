@@ -436,10 +436,17 @@ input:disabled {
 
 .project-panel,
 .standalone-panel {
-  overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--panel);
+}
+
+.project-panel {
+  overflow: visible;
+}
+
+.standalone-panel {
+  overflow: hidden;
 }
 
 .project-header {
@@ -557,8 +564,7 @@ input:disabled {
 
 .primary-button,
 .danger-button,
-.text-button,
-.project-remove-button {
+.text-button {
   display: inline-flex;
   min-height: 36px;
   align-items: center;
@@ -591,19 +597,6 @@ input:disabled {
 
 .danger-button:hover:not(:disabled) {
   border-color: var(--danger);
-}
-
-.project-remove-button {
-  margin-left: 3px;
-  border: 1px solid var(--border-strong);
-  color: var(--muted);
-  background: transparent;
-}
-
-.project-remove-button:hover:not(:disabled) {
-  border-color: var(--danger);
-  color: var(--danger);
-  background: var(--danger-soft);
 }
 
 .project-table-wrap {
@@ -833,6 +826,51 @@ input:disabled {
   border-color: var(--accent);
   color: var(--accent-text);
   background: var(--accent-soft);
+}
+
+.project-actions-menu {
+  position: relative;
+  flex: none;
+  margin-left: 3px;
+}
+
+.project-actions-menu > .icon-button[aria-expanded='true'] {
+  border-color: var(--accent);
+  color: var(--accent-text);
+  background: var(--accent-soft);
+}
+
+.project-actions-popover {
+  position: absolute;
+  z-index: 4;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 190px;
+  padding: 4px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 10px 28px rgb(0 0 0 / 22%);
+}
+
+.project-actions-item {
+  display: flex;
+  width: 100%;
+  min-height: 34px;
+  align-items: center;
+  gap: 9px;
+  padding: 0 10px;
+  border-radius: 7px;
+  color: var(--danger);
+  background: transparent;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-align: left;
+}
+
+.project-actions-item:hover,
+.project-actions-item:focus-visible {
+  background: var(--danger-soft);
 }
 
 .secondary-view,
@@ -1425,7 +1463,7 @@ input:disabled {
 
   .project-controls {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1fr auto;
   }
 
   .import-actions {
@@ -1445,9 +1483,7 @@ input:disabled {
     justify-self: start;
   }
 
-  .project-remove-button {
-    grid-column: 1 / -1;
-    justify-self: end;
+  .project-actions-menu {
     margin-left: 0;
   }
 

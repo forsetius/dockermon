@@ -85,9 +85,17 @@ describe('App', () => {
     });
     expect(within(project).getByRole('checkbox', { name: 'Service: postgres-test' })).toBeChecked();
 
-    await fireEvent.click(
-      within(project).getByRole('button', { name: 'Remove zerniki from Dockermon' }),
-    );
+    expect(within(project).queryByRole('menuitem')).not.toBeInTheDocument();
+    const menuTrigger = within(project).getByRole('button', { name: 'More actions for zerniki' });
+    await fireEvent.click(menuTrigger);
+    expect(within(project).getByRole('menuitem', { name: 'Remove from Dockermon' })).toHaveFocus();
+
+    await fireEvent.keyDown(window, { key: 'Escape' });
+    expect(within(project).queryByRole('menuitem')).not.toBeInTheDocument();
+    expect(menuTrigger).toHaveFocus();
+
+    await fireEvent.click(menuTrigger);
+    await fireEvent.click(within(project).getByRole('menuitem', { name: 'Remove from Dockermon' }));
 
     await waitFor(() => {
       expect(screen.queryByTestId('project-compose:zerniki')).not.toBeInTheDocument();

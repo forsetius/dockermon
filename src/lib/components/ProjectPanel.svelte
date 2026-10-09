@@ -8,6 +8,7 @@
   } from '../domain';
   import { translate } from '../i18n';
   import Icon from './Icon.svelte';
+  import ProjectActionsMenu from './ProjectActionsMenu.svelte';
   import ServiceTable from './ServiceTable.svelte';
   import Toggle from './Toggle.svelte';
 
@@ -128,17 +129,12 @@
         <Icon name="stop" size={15} />
         {translate(locale, 'action.stopSelected')}
       </button>
-      <button
-        aria-label={translate(locale, 'projects.remove', { project: project.name })}
-        class="project-remove-button"
+      <ProjectActionsMenu
         disabled={busyProjectId === project.id}
-        onclick={onremove}
-        title={translate(locale, 'projects.remove', { project: project.name })}
-        type="button"
-      >
-        <Icon name="trash" size={17} />
-        <span>{translate(locale, 'projects.removeAction')}</span>
-      </button>
+        {locale}
+        {onremove}
+        projectName={project.name}
+      />
     </div>
   </header>
 

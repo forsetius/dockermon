@@ -11,6 +11,7 @@
     | 'logs'
     | 'maximize'
     | 'minimize'
+    | 'more-vertical'
     | 'play'
     | 'projects'
     | 'restart'
@@ -53,6 +54,10 @@
   {:else if name === 'restart'}
     <path d="M19.2 9A8 8 0 1 0 20 14" />
     <path d="M19.2 4.5V9h-4.5" />
+  {:else if name === 'more-vertical'}
+    <circle cx="12" cy="5" fill="currentColor" r="1.45" stroke="none" />
+    <circle cx="12" cy="12" fill="currentColor" r="1.45" stroke="none" />
+    <circle cx="12" cy="19" fill="currentColor" r="1.45" stroke="none" />
   {:else if name === 'logs'}
     <path d="M6 3.5h9l3 3v14H6v-17Z" />
     <path d="M15 3.5v3h3M9 11h6M9 15h6" />
