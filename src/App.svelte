@@ -31,14 +31,17 @@
   let snapshot = $state<ApplicationSnapshot | null>(null);
   let loadState = $state<'error' | 'loading' | 'ready'>('loading');
   let currentView = $state<NavigationView>('projects');
-  let busyProjectId = $state<string | null>(null);
+  let busyProjectIds = $state<string[]>([]);
   let importInProgress = $state(false);
-  let busyServiceId = $state<string | null>(null);
+  let busyStandaloneServiceIds = $state<string[]>([]);
   let selectedServiceId = $state<string | null>(null);
   let logLines = $state<string[]>([]);
   let logsLoading = $state(false);
   let followLogs = $state(true);
-  let toast = $state<{ message: string; tone: 'error' | 'success' } | null>(null);
+  let toast = $state<{ details?: string[]; message: string; tone: 'error' | 'success' } | null>(
+    null,
+  );
+  let lastGlobalStopReportSequence = 0;
 
   const fallbackLocale: Locale = navigator.language.toLowerCase().startsWith('pl') ? 'pl' : 'en';
   const locale = $derived(snapshot?.preferences.language ?? fallbackLocale);
@@ -61,7 +64,7 @@
     void loadSnapshot();
     void runtimeClient
       .subscribe((nextSnapshot) => {
-        snapshot = nextSnapshot;
+        receiveSnapshot(nextSnapshot);
       })
       .then((stopSubscription) => {
         unsubscribe = stopSubscription;
@@ -86,7 +89,7 @@
   async function loadSnapshot(): Promise<void> {
     loadState = 'loading';
     try {
-      snapshot = await runtimeClient.getSnapshot();
+      receiveSnapshot(await runtimeClient.getSnapshot());
       loadState = 'ready';
     } catch {
       loadState = 'error';
@@ -94,29 +97,29 @@
   }
 
   async function updateProjectActive(projectId: string, active: boolean): Promise<void> {
-    busyProjectId = projectId;
+    setProjectBusy(projectId, true);
     try {
       snapshot = await runtimeClient.setProjectActive(projectId, active);
     } catch (error) {
       showError(error);
     } finally {
-      busyProjectId = null;
+      setProjectBusy(projectId, false);
     }
   }
 
   async function updateProjectProfiles(projectId: string, profiles: string[]): Promise<void> {
-    busyProjectId = projectId;
+    setProjectBusy(projectId, true);
     try {
       snapshot = await runtimeClient.setProjectProfiles(projectId, profiles);
     } catch (error) {
       showError(error);
     } finally {
-      busyProjectId = null;
+      setProjectBusy(projectId, false);
     }
   }
 
   async function removeProject(projectId: string, projectName: string): Promise<void> {
-    busyProjectId = projectId;
+    setProjectBusy(projectId, true);
     try {
       snapshot = await runtimeClient.removeProject(projectId);
       toast = {
@@ -126,7 +129,7 @@
     } catch (error) {
       showError(error);
     } finally {
-      busyProjectId = null;
+      setProjectBusy(projectId, false);
     }
   }
 
@@ -162,7 +165,7 @@
     projectName: string,
     action: ProjectAction,
   ): Promise<void> {
-    busyProjectId = projectId;
+    setProjectBusy(projectId, true);
     try {
       snapshot = await runtimeClient.runProjectAction(projectId, action);
       const actionKey: TranslationKey =
@@ -171,12 +174,16 @@
     } catch (error) {
       showError(error);
     } finally {
-      busyProjectId = null;
+      setProjectBusy(projectId, false);
     }
   }
 
   async function runServiceAction(service: ServiceSnapshot, action: ServiceAction): Promise<void> {
-    busyServiceId = service.id;
+    const projectId = snapshot?.projects.find((project) =>
+      project.services.some((candidate) => candidate.id === service.id),
+    )?.id;
+    if (projectId) setProjectBusy(projectId, true);
+    else setStandaloneServiceBusy(service.id, true);
     try {
       snapshot = await runtimeClient.runServiceAction(service.id, action);
       const actionKeys: Record<ServiceAction, TranslationKey> = {
@@ -189,7 +196,8 @@
     } catch (error) {
       showError(error);
     } finally {
-      busyServiceId = null;
+      if (projectId) setProjectBusy(projectId, false);
+      else setStandaloneServiceBusy(service.id, false);
     }
   }
 
@@ -242,6 +250,7 @@
         : undefined;
     const errorKeys: Partial<Record<string, TranslationKey>> = {
       COMPOSE_CLI_NOT_FOUND: 'error.composeCliNotFound',
+      COMPOSE_ACTION_FAILED: 'error.composeActionFailed',
       COMPOSE_CONFIG_UNAVAILABLE: 'error.composeConfigInvalid',
       COMPOSE_CONFIG_INVALID: 'error.composeConfigInvalid',
       COMPOSE_FILE_NOT_FOUND: 'error.composeFileNotFound',
@@ -249,10 +258,47 @@
       CONFIG_READ_FAILED: 'error.configInvalid',
       CONFIG_VERSION_UNSUPPORTED: 'error.configInvalid',
       CONFIG_WRITE_FAILED: 'error.configWriteFailed',
+      CONTAINER_ACTION_FAILED: 'error.containerActionFailed',
+      CONTAINER_OPERATION_IN_PROGRESS: 'error.containerOperationInProgress',
+      DOCKER_PERMISSION_DENIED: 'error.dockerPermissionDenied',
+      DOCKER_UNAVAILABLE: 'error.dockerUnavailable',
+      GLOBAL_STOP_IN_PROGRESS: 'error.globalStopInProgress',
+      NO_SERVICES_SELECTED: 'error.noServicesSelected',
+      PROJECT_SOURCE_UNAVAILABLE: 'error.projectSourceUnavailable',
+      PROJECT_OPERATION_IN_PROGRESS: 'error.projectOperationInProgress',
     };
     toast = {
       message: translate(locale, (code && errorKeys[code]) || 'operation.failed'),
       tone: 'error',
+    };
+  }
+
+  function setProjectBusy(projectId: string, busy: boolean): void {
+    busyProjectIds = busy
+      ? [...busyProjectIds.filter((candidate) => candidate !== projectId), projectId]
+      : busyProjectIds.filter((candidate) => candidate !== projectId);
+  }
+
+  function setStandaloneServiceBusy(serviceId: string, busy: boolean): void {
+    busyStandaloneServiceIds = busy
+      ? [...busyStandaloneServiceIds.filter((candidate) => candidate !== serviceId), serviceId]
+      : busyStandaloneServiceIds.filter((candidate) => candidate !== serviceId);
+  }
+
+  function receiveSnapshot(nextSnapshot: ApplicationSnapshot): void {
+    snapshot = nextSnapshot;
+    const report = nextSnapshot.globalStopReport;
+    if (!report || report.sequence <= lastGlobalStopReportSequence) return;
+    lastGlobalStopReportSequence = report.sequence;
+    toast = {
+      details: report.failures.map((failure) =>
+        translate(locale, 'globalStop.failure', { container: failure.containerName }),
+      ),
+      message: translate(locale, 'globalStop.completed', {
+        stopped: report.stopped,
+        total: report.total,
+      }),
+      tone: report.failures.length === 0 ? 'success' : 'error',
     };
   }
 </script>
@@ -272,6 +318,19 @@
     {:else if loadState === 'error'}
       <EmptyState kind="error" {locale} onretry={loadSnapshot} />
     {:else if snapshot}
+      {#if snapshot.globalStopInProgress}
+        <div aria-live="polite" class="global-stop-progress" role="status">
+          <Icon name="stop" size={16} />
+          {#if snapshot.globalStopProgress && snapshot.globalStopProgress.total > 0}
+            {translate(locale, 'globalStop.progress', {
+              completed: snapshot.globalStopProgress.completed,
+              total: snapshot.globalStopProgress.total,
+            })}
+          {:else}
+            {translate(locale, 'globalStop.preparing')}
+          {/if}
+        </div>
+      {/if}
       {#if currentView === 'projects'}
         <section aria-labelledby="projects-title" class="projects-view">
           <header class="page-heading projects-heading">
@@ -314,9 +373,9 @@
             <div class="project-list">
               {#each snapshot.projects as project (project.id)}
                 <ProjectPanel
-                  {busyProjectId}
-                  {busyServiceId}
-                  lifecycleActionsEnabled={snapshot.capabilities.lifecycleActions}
+                  busy={busyProjectIds.includes(project.id)}
+                  lifecycleActionsEnabled={snapshot.capabilities.lifecycleActions &&
+                    !snapshot.globalStopInProgress}
                   {locale}
                   logsEnabled={snapshot.capabilities.logs}
                   onactive={(active) => updateProjectActive(project.id, active)}
@@ -344,8 +403,9 @@
           {:else}
             <div class="standalone-panel">
               <ServiceTable
-                actionsEnabled={snapshot.capabilities.lifecycleActions}
-                {busyServiceId}
+                actionsEnabled={snapshot.capabilities.lifecycleActions &&
+                  !snapshot.globalStopInProgress}
+                busyServiceIds={busyStandaloneServiceIds}
                 {locale}
                 logsEnabled={snapshot.capabilities.logs}
                 onaction={runServiceAction}
@@ -384,6 +444,12 @@
   {/if}
 
   {#if toast}
-    <Toast {locale} message={toast.message} ondismiss={() => (toast = null)} tone={toast.tone} />
+    <Toast
+      details={toast.details}
+      {locale}
+      message={toast.message}
+      ondismiss={() => (toast = null)}
+      tone={toast.tone}
+    />
   {/if}
 </div>

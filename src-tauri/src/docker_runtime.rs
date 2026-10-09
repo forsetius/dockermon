@@ -1,7 +1,8 @@
-use crate::project_catalog::{DiscoveredProject, ProjectCatalog};
+use crate::project_catalog::{ComposeExecutionContext, DiscoveredProject, ProjectCatalog};
 use crate::runtime::{
-    ApplicationSnapshot, ConnectionStatus, Locale, Preferences, ProjectSnapshot,
-    RuntimeCapabilities, RuntimeError, RuntimeOperation, RuntimeSupervisor, ServiceLogSnapshot,
+    ApplicationSnapshot, ConnectionStatus, ContainerStopFailure, GlobalStopProgress,
+    GlobalStopReport, Locale, Preferences, ProjectAction, ProjectSnapshot, RuntimeCapabilities,
+    RuntimeError, RuntimeOperation, RuntimeSupervisor, ServiceAction, ServiceLogSnapshot,
     ServiceSnapshot, ServiceStatus, SnapshotPublisher, ThemePreference, VisibilityProbe,
 };
 use bollard::{
@@ -13,13 +14,16 @@ use bollard::{
 use futures_util::{
     StreamExt,
     future::{BoxFuture, join_all},
+    stream,
 };
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
+    ffi::OsString,
     path::PathBuf,
-    sync::Arc,
+    sync::{Arc, RwLock as StandardRwLock},
     time::Duration,
 };
+use tokio::process::Command;
 use tokio::sync::{Mutex, RwLock};
 
 const COMPOSE_PROJECT_LABEL: &str = "com.docker.compose.project";
@@ -29,10 +33,14 @@ const COMPOSE_WORKING_DIRECTORY_LABEL: &str = "com.docker.compose.project.workin
 const EVENT_RETRY_LIMIT: Duration = Duration::from_secs(15);
 const FULL_SYNCHRONIZATION_INTERVAL: Duration = Duration::from_secs(30);
 const RESOURCE_SAMPLE_INTERVAL: Duration = Duration::from_secs(2);
+const GLOBAL_STOP_CONCURRENCY: usize = 4;
 
 pub struct DockerRuntimeSupervisor {
+    action_gate: RwLock<()>,
     catalog: Mutex<ProjectCatalog>,
     client: Mutex<Option<Docker>>,
+    operation_locks: Mutex<HashMap<String, Arc<Mutex<()>>>>,
+    publisher: StandardRwLock<Option<SnapshotPublisher>>,
     reconciliation_lock: Mutex<()>,
     state: RwLock<DockerRuntimeState>,
 }
@@ -53,8 +61,11 @@ impl DockerRuntimeSupervisor {
         let preferences = catalog.preferences();
         let projects = catalog.decorate_projects(Vec::new());
         Self {
+            action_gate: RwLock::new(()),
             catalog: Mutex::new(catalog),
             client: Mutex::new(None),
+            operation_locks: Mutex::new(HashMap::new()),
+            publisher: StandardRwLock::new(None),
             reconciliation_lock: Mutex::new(()),
             state: RwLock::new(DockerRuntimeState {
                 snapshot: {
@@ -97,6 +108,7 @@ impl DockerRuntimeSupervisor {
                 let runtime_error = runtime_error(&error);
                 let mut state = self.state.write().await;
                 state.snapshot.connection = connection_status(&error);
+                state.snapshot.capabilities.lifecycle_actions = false;
                 Err(runtime_error)
             }
         }
@@ -128,6 +140,33 @@ impl DockerRuntimeSupervisor {
 
     async fn publish_current(&self, publish: &SnapshotPublisher, refresh_tray: bool) {
         publish(self.state.read().await.snapshot.clone(), refresh_tray);
+    }
+
+    async fn publish_snapshot(&self, refresh_tray: bool) {
+        let publisher = self
+            .publisher
+            .read()
+            .expect("snapshot publisher lock should not be poisoned")
+            .clone();
+        if let Some(publisher) = publisher {
+            publisher(self.state.read().await.snapshot.clone(), refresh_tray);
+        }
+    }
+
+    async fn operation_lock(&self, key: &str) -> Arc<Mutex<()>> {
+        let mut locks = self.operation_locks.lock().await;
+        locks
+            .entry(key.to_owned())
+            .or_insert_with(|| Arc::new(Mutex::new(())))
+            .clone()
+    }
+
+    async fn ensure_global_stop_is_idle(&self) -> Result<(), RuntimeError> {
+        if self.state.read().await.snapshot.global_stop_in_progress {
+            Err(RuntimeError::new("GLOBAL_STOP_IN_PROGRESS", true))
+        } else {
+            Ok(())
+        }
     }
 
     async fn monitor_events(self: Arc<Self>, publish: SnapshotPublisher) {
@@ -224,10 +263,12 @@ impl DockerRuntimeSupervisor {
 
     async fn record_connection_error(&self, error: &DockerError) {
         *self.client.lock().await = None;
-        self.state.write().await.snapshot.connection = connection_status(error);
+        let mut state = self.state.write().await;
+        state.snapshot.connection = connection_status(error);
+        state.snapshot.capabilities.lifecycle_actions = false;
     }
 
-    async fn execute_read_only_operation(
+    async fn execute_operation(
         &self,
         operation: RuntimeOperation,
     ) -> Result<ApplicationSnapshot, RuntimeError> {
@@ -245,6 +286,17 @@ impl DockerRuntimeSupervisor {
                 Ok((snapshot, _)) => Ok(snapshot),
                 Err(_) => Ok(self.state.read().await.snapshot.clone()),
             };
+        }
+
+        match operation {
+            RuntimeOperation::RunProjectAction { action, project_id } => {
+                return self.run_project_action(&project_id, action).await;
+            }
+            RuntimeOperation::RunServiceAction { action, service_id } => {
+                return self.run_service_action(&service_id, action).await;
+            }
+            RuntimeOperation::StopAll => return self.stop_all().await,
+            _ => {}
         }
 
         let _reconciliation_guard = self.reconciliation_lock.lock().await;
@@ -315,21 +367,341 @@ impl DockerRuntimeSupervisor {
                 catalog.set_theme(theme)?;
                 state.snapshot.preferences.theme = theme;
             }
-            RuntimeOperation::RunProjectAction { action, project_id } => {
-                let _ = (action, project_id);
-                return Err(RuntimeError::new("RUNTIME_READ_ONLY", false));
-            }
-            RuntimeOperation::RunServiceAction { action, service_id } => {
-                let _ = (action, service_id);
-                return Err(RuntimeError::new("RUNTIME_READ_ONLY", false));
-            }
-            RuntimeOperation::StopAll => {
-                return Err(RuntimeError::new("RUNTIME_READ_ONLY", false));
-            }
+            RuntimeOperation::RunProjectAction { .. }
+            | RuntimeOperation::RunServiceAction { .. }
+            | RuntimeOperation::StopAll => unreachable!(),
             RuntimeOperation::ImportProject { .. } => unreachable!(),
         }
 
         Ok(state.snapshot.clone())
+    }
+
+    async fn run_project_action(
+        &self,
+        project_id: &str,
+        action: ProjectAction,
+    ) -> Result<ApplicationSnapshot, RuntimeError> {
+        self.ensure_global_stop_is_idle().await?;
+        let _action_guard = self.action_gate.read().await;
+        self.ensure_global_stop_is_idle().await?;
+        let project_lock = self.operation_lock(project_id).await;
+        let _project_guard = project_lock
+            .try_lock()
+            .map_err(|_| RuntimeError::new("PROJECT_OPERATION_IN_PROGRESS", true))?;
+
+        let (context, services) = {
+            let state = self.state.read().await;
+            let project = state
+                .snapshot
+                .projects
+                .iter()
+                .find(|project| project.id == project_id)
+                .ok_or_else(|| RuntimeError::new("PROJECT_NOT_FOUND", false))?;
+            let services = project
+                .services
+                .iter()
+                .filter(|service| service.included && service.bulk_selected)
+                .map(|service| service.name.clone())
+                .collect::<Vec<_>>();
+            let context = self.catalog.lock().await.execution_context(project_id)?;
+            (context, services)
+        };
+        if services.is_empty() {
+            return Err(RuntimeError::new("NO_SERVICES_SELECTED", false));
+        }
+
+        let service_action = match action {
+            ProjectAction::StartSelected => ServiceAction::Start,
+            ProjectAction::StopSelected => ServiceAction::Stop,
+        };
+        run_compose(&context, service_action, &services).await?;
+        self.reconcile(false).await.map(|(snapshot, _)| snapshot)
+    }
+
+    async fn run_service_action(
+        &self,
+        service_id: &str,
+        action: ServiceAction,
+    ) -> Result<ApplicationSnapshot, RuntimeError> {
+        self.ensure_global_stop_is_idle().await?;
+        let _action_guard = self.action_gate.read().await;
+        self.ensure_global_stop_is_idle().await?;
+
+        let compose_service = {
+            let state = self.state.read().await;
+            state.snapshot.projects.iter().find_map(|project| {
+                project
+                    .services
+                    .iter()
+                    .find(|service| service.id == service_id)
+                    .map(|service| (project.id.clone(), service.name.clone(), service.included))
+            })
+        };
+
+        if let Some((project_id, service_name, included)) = compose_service {
+            if !included {
+                return Err(RuntimeError::new("SERVICE_NOT_INCLUDED", false));
+            }
+            let project_lock = self.operation_lock(&project_id).await;
+            let _project_guard = project_lock
+                .try_lock()
+                .map_err(|_| RuntimeError::new("PROJECT_OPERATION_IN_PROGRESS", true))?;
+            let context = self.catalog.lock().await.execution_context(&project_id)?;
+            run_compose(&context, action, &[service_name]).await?;
+        } else {
+            let container_id = service_id
+                .strip_prefix("container:")
+                .ok_or_else(|| RuntimeError::new("SERVICE_NOT_FOUND", false))?;
+            let container_exists = self
+                .state
+                .read()
+                .await
+                .snapshot
+                .standalone_containers
+                .iter()
+                .any(|service| service.id == service_id);
+            if !container_exists {
+                return Err(RuntimeError::new("SERVICE_NOT_FOUND", false));
+            }
+            let container_lock = self.operation_lock(service_id).await;
+            let _container_guard = container_lock
+                .try_lock()
+                .map_err(|_| RuntimeError::new("CONTAINER_OPERATION_IN_PROGRESS", true))?;
+            run_container_action(
+                &self.docker().await.map_err(|error| runtime_error(&error))?,
+                container_id,
+                action,
+            )
+            .await?;
+        }
+
+        self.reconcile(false).await.map(|(snapshot, _)| snapshot)
+    }
+
+    async fn stop_all(&self) -> Result<ApplicationSnapshot, RuntimeError> {
+        let report_sequence = {
+            let mut state = self.state.write().await;
+            if state.snapshot.global_stop_in_progress {
+                return Err(RuntimeError::new("GLOBAL_STOP_IN_PROGRESS", true));
+            }
+            let report_sequence = state
+                .snapshot
+                .global_stop_report
+                .as_ref()
+                .map_or(1, |report| report.sequence + 1);
+            state.snapshot.global_stop_in_progress = true;
+            state.snapshot.global_stop_progress = Some(GlobalStopProgress {
+                completed: 0,
+                total: 0,
+            });
+            state.snapshot.global_stop_report = None;
+            report_sequence
+        };
+        self.publish_snapshot(true).await;
+
+        let _action_guard = self.action_gate.write().await;
+        let docker = match self.docker().await {
+            Ok(docker) => docker,
+            Err(error) => {
+                self.record_connection_error(&error).await;
+                self.finish_failed_global_stop().await;
+                return Err(runtime_error(&error));
+            }
+        };
+        let options = ListContainersOptionsBuilder::default().all(true).build();
+        let containers = match docker.list_containers(Some(options)).await {
+            Ok(containers) => containers,
+            Err(error) => {
+                self.record_connection_error(&error).await;
+                self.finish_failed_global_stop().await;
+                return Err(runtime_error(&error));
+            }
+        };
+        let targets = global_stop_targets(&containers);
+        {
+            let mut state = self.state.write().await;
+            state.snapshot.global_stop_progress = Some(GlobalStopProgress {
+                completed: 0,
+                total: targets.len(),
+            });
+        }
+        self.publish_snapshot(true).await;
+
+        let total = targets.len();
+        let mut results = Vec::with_capacity(total);
+        let mut stops = stream::iter(targets.into_iter().map(|target| {
+            let docker = docker.clone();
+            async move {
+                let result = stop_container(&docker, &target).await;
+                (target, result)
+            }
+        }))
+        .buffer_unordered(GLOBAL_STOP_CONCURRENCY);
+        while let Some(result) = stops.next().await {
+            results.push(result);
+            {
+                let mut state = self.state.write().await;
+                state.snapshot.global_stop_progress = Some(GlobalStopProgress {
+                    completed: results.len(),
+                    total,
+                });
+            }
+            self.publish_snapshot(false).await;
+        }
+
+        let report = global_stop_report(results, report_sequence);
+        {
+            let mut state = self.state.write().await;
+            state.snapshot.global_stop_in_progress = false;
+            state.snapshot.global_stop_progress = None;
+            state.snapshot.global_stop_report = Some(report);
+        }
+        self.publish_snapshot(true).await;
+
+        match self.reconcile(false).await {
+            Ok((snapshot, _)) => Ok(snapshot),
+            Err(_) => Ok(self.state.read().await.snapshot.clone()),
+        }
+    }
+
+    async fn finish_failed_global_stop(&self) {
+        let mut state = self.state.write().await;
+        state.snapshot.global_stop_in_progress = false;
+        state.snapshot.global_stop_progress = None;
+        drop(state);
+        self.publish_snapshot(true).await;
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct GlobalStopTarget {
+    container_id: String,
+    container_name: String,
+    paused: bool,
+}
+
+fn compose_arguments(
+    context: &ComposeExecutionContext,
+    action: ServiceAction,
+    services: &[String],
+) -> Vec<OsString> {
+    let mut arguments = vec![OsString::from("compose")];
+    for compose_file in &context.compose_files {
+        arguments.push(OsString::from("-f"));
+        arguments.push(compose_file.as_os_str().to_owned());
+    }
+    for profile in &context.enabled_profiles {
+        arguments.push(OsString::from("--profile"));
+        arguments.push(OsString::from(profile));
+    }
+    match action {
+        ServiceAction::Start => {
+            arguments.extend([OsString::from("up"), OsString::from("-d")]);
+        }
+        ServiceAction::Stop => arguments.push(OsString::from("stop")),
+        ServiceAction::Restart => arguments.push(OsString::from("restart")),
+        ServiceAction::Resume => arguments.push(OsString::from("unpause")),
+    }
+    arguments.extend(services.iter().map(OsString::from));
+    arguments
+}
+
+async fn run_compose(
+    context: &ComposeExecutionContext,
+    action: ServiceAction,
+    services: &[String],
+) -> Result<(), RuntimeError> {
+    let output = Command::new("docker")
+        .args(compose_arguments(context, action, services))
+        .current_dir(&context.working_directory)
+        .output()
+        .await
+        .map_err(|error| {
+            if error.kind() == std::io::ErrorKind::NotFound {
+                RuntimeError::new("COMPOSE_CLI_NOT_FOUND", false)
+            } else {
+                RuntimeError::new("COMPOSE_ACTION_FAILED", true)
+            }
+        })?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(RuntimeError::new("COMPOSE_ACTION_FAILED", true))
+    }
+}
+
+async fn run_container_action(
+    docker: &Docker,
+    container_id: &str,
+    action: ServiceAction,
+) -> Result<(), RuntimeError> {
+    let result = match action {
+        ServiceAction::Start => docker.start_container(container_id, None).await,
+        ServiceAction::Stop => docker.stop_container(container_id, None).await,
+        ServiceAction::Restart => docker.restart_container(container_id, None).await,
+        ServiceAction::Resume => docker.unpause_container(container_id).await,
+    };
+    result.map_err(|_| RuntimeError::new("CONTAINER_ACTION_FAILED", true))
+}
+
+fn global_stop_targets(containers: &[ContainerSummary]) -> Vec<GlobalStopTarget> {
+    containers
+        .iter()
+        .filter_map(|container| {
+            let state = container.state.as_ref()?.as_ref();
+            if !matches!(state, "running" | "paused" | "restarting") {
+                return None;
+            }
+            Some(GlobalStopTarget {
+                container_id: container.id.clone()?,
+                container_name: container_name(container),
+                paused: state == "paused",
+            })
+        })
+        .collect()
+}
+
+async fn stop_container(
+    docker: &Docker,
+    target: &GlobalStopTarget,
+) -> Result<(), ContainerStopFailure> {
+    if target.paused
+        && docker
+            .unpause_container(&target.container_id)
+            .await
+            .is_err()
+    {
+        return Err(ContainerStopFailure {
+            code: "CONTAINER_UNPAUSE_FAILED".to_owned(),
+            container_name: target.container_name.clone(),
+            retryable: true,
+        });
+    }
+    docker
+        .stop_container(&target.container_id, None)
+        .await
+        .map_err(|_| ContainerStopFailure {
+            code: "CONTAINER_STOP_FAILED".to_owned(),
+            container_name: target.container_name.clone(),
+            retryable: true,
+        })
+}
+
+fn global_stop_report(
+    results: Vec<(GlobalStopTarget, Result<(), ContainerStopFailure>)>,
+    sequence: u64,
+) -> GlobalStopReport {
+    let total = results.len();
+    let mut failures = results
+        .into_iter()
+        .filter_map(|(_, result)| result.err())
+        .collect::<Vec<_>>();
+    failures.sort_by(|left, right| left.container_name.cmp(&right.container_name));
+    GlobalStopReport {
+        stopped: total - failures.len(),
+        failures,
+        sequence,
+        total,
     }
 }
 
@@ -338,7 +710,7 @@ impl RuntimeSupervisor for DockerRuntimeSupervisor {
         &self,
         operation: RuntimeOperation,
     ) -> BoxFuture<'_, Result<ApplicationSnapshot, RuntimeError>> {
-        Box::pin(async move { self.execute_read_only_operation(operation).await })
+        Box::pin(async move { self.execute_operation(operation).await })
     }
 
     fn logs<'a>(
@@ -357,6 +729,10 @@ impl RuntimeSupervisor for DockerRuntimeSupervisor {
         publish: SnapshotPublisher,
         window_is_visible: VisibilityProbe,
     ) {
+        *self
+            .publisher
+            .write()
+            .expect("snapshot publisher lock should not be poisoned") = Some(publish.clone());
         tauri::async_runtime::spawn(self.clone().monitor_events(publish.clone()));
         tauri::async_runtime::spawn(self.monitor_resources(publish, window_is_visible));
     }
@@ -496,11 +872,13 @@ fn build_snapshot(
     ApplicationSnapshot {
         activity: previous.activity.clone(),
         capabilities: RuntimeCapabilities {
-            lifecycle_actions: false,
+            lifecycle_actions: true,
             logs: false,
         },
         connection: ConnectionStatus::Connected,
-        global_stop_in_progress: false,
+        global_stop_in_progress: previous.global_stop_in_progress,
+        global_stop_progress: previous.global_stop_progress.clone(),
+        global_stop_report: previous.global_stop_report.clone(),
         preferences: previous.preferences.clone(),
         projects,
         standalone_containers,
@@ -857,6 +1235,8 @@ fn empty_snapshot() -> ApplicationSnapshot {
         },
         connection: ConnectionStatus::Connecting,
         global_stop_in_progress: false,
+        global_stop_progress: None,
+        global_stop_report: None,
         preferences: Preferences {
             language: Locale::system(),
             theme: ThemePreference::System,
@@ -1108,10 +1488,165 @@ mod tests {
         let mut previous = build_snapshot(containers.clone(), None, &empty_snapshot());
         previous.projects[0].active = true;
         previous.projects[0].services[0].bulk_selected = false;
+        previous.global_stop_report = Some(GlobalStopReport {
+            failures: Vec::new(),
+            sequence: 3,
+            stopped: 1,
+            total: 1,
+        });
 
         let next = build_snapshot(containers, None, &previous);
 
         assert!(next.projects[0].active);
         assert!(!next.projects[0].services[0].bulk_selected);
+        assert_eq!(next.global_stop_report, previous.global_stop_report);
+    }
+
+    #[test]
+    fn builds_compose_arguments_without_a_shell_and_preserves_file_order() {
+        let context = ComposeExecutionContext {
+            compose_files: vec![
+                PathBuf::from("/workspace/compose.yaml"),
+                PathBuf::from("/workspace/compose.local.yaml"),
+            ],
+            enabled_profiles: vec!["test".to_owned()],
+            working_directory: PathBuf::from("/workspace"),
+        };
+
+        assert_eq!(
+            compose_arguments(&context, ServiceAction::Start, &["api".to_owned()]),
+            vec![
+                "compose",
+                "-f",
+                "/workspace/compose.yaml",
+                "-f",
+                "/workspace/compose.local.yaml",
+                "--profile",
+                "test",
+                "up",
+                "-d",
+                "api",
+            ]
+            .into_iter()
+            .map(OsString::from)
+            .collect::<Vec<_>>()
+        );
+        let action_tail = |action| {
+            compose_arguments(&context, action, &["api".to_owned()])
+                .into_iter()
+                .skip(7)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            action_tail(ServiceAction::Stop),
+            ["stop", "api"]
+                .into_iter()
+                .map(OsString::from)
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(
+            action_tail(ServiceAction::Restart),
+            ["restart", "api"]
+                .into_iter()
+                .map(OsString::from)
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(
+            action_tail(ServiceAction::Resume),
+            ["unpause", "api"]
+                .into_iter()
+                .map(OsString::from)
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn global_stop_targets_every_running_or_paused_container() {
+        let containers = vec![
+            container(
+                "one",
+                "known-project-one",
+                "running",
+                Some(("known-one", "api")),
+                Vec::new(),
+            ),
+            container(
+                "two",
+                "known-project-two",
+                "running",
+                Some(("known-two", "worker")),
+                Vec::new(),
+            ),
+            container(
+                "three",
+                "unknown-project",
+                "running",
+                Some(("unknown", "web")),
+                Vec::new(),
+            ),
+            container("four", "standalone", "paused", None, Vec::new()),
+            container("five", "already-stopped", "exited", None, Vec::new()),
+        ];
+
+        let targets = global_stop_targets(&containers);
+
+        assert_eq!(targets.len(), 4);
+        assert!(
+            targets
+                .iter()
+                .any(|target| target.container_name == "known-project-one")
+        );
+        assert!(
+            targets
+                .iter()
+                .any(|target| target.container_name == "known-project-two")
+        );
+        assert!(
+            targets
+                .iter()
+                .any(|target| target.container_name == "unknown-project")
+        );
+        assert!(
+            targets
+                .iter()
+                .any(|target| target.container_name == "standalone" && target.paused)
+        );
+    }
+
+    #[test]
+    fn reports_full_and_partial_global_stop_results() {
+        let first = GlobalStopTarget {
+            container_id: "one".to_owned(),
+            container_name: "alpha".to_owned(),
+            paused: false,
+        };
+        let second = GlobalStopTarget {
+            container_id: "two".to_owned(),
+            container_name: "beta".to_owned(),
+            paused: false,
+        };
+        let full = global_stop_report(vec![(first.clone(), Ok(())), (second.clone(), Ok(()))], 1);
+        let partial = global_stop_report(
+            vec![
+                (first, Ok(())),
+                (
+                    second,
+                    Err(ContainerStopFailure {
+                        code: "CONTAINER_STOP_FAILED".to_owned(),
+                        container_name: "beta".to_owned(),
+                        retryable: true,
+                    }),
+                ),
+            ],
+            2,
+        );
+
+        assert_eq!((full.stopped, full.total, full.failures.len()), (2, 2, 0));
+        assert_eq!(
+            (partial.stopped, partial.total, partial.failures.len()),
+            (1, 2, 1)
+        );
+        assert_eq!(partial.failures[0].container_name, "beta");
+        assert_eq!(partial.sequence, 2);
     }
 }

@@ -26,6 +26,13 @@ pub struct DiscoveredProject {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ComposeExecutionContext {
+    pub compose_files: Vec<PathBuf>,
+    pub enabled_profiles: Vec<String>,
+    pub working_directory: PathBuf,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 struct ComposeProjectSource {
     compose_files: Vec<PathBuf>,
     working_directory: PathBuf,
@@ -209,6 +216,30 @@ impl ProjectCatalog {
             language: self.configuration.preferences.language,
             theme: self.configuration.preferences.theme,
         }
+    }
+
+    pub(crate) fn execution_context(
+        &self,
+        project_id: &str,
+    ) -> Result<ComposeExecutionContext, RuntimeError> {
+        let project = self
+            .configuration
+            .projects
+            .iter()
+            .find(|project| project.id == project_id)
+            .ok_or_else(|| RuntimeError::new("PROJECT_SOURCE_UNAVAILABLE", false))?;
+        let settings = self
+            .configuration
+            .project_settings
+            .get(project_id)
+            .cloned()
+            .unwrap_or_default();
+
+        Ok(ComposeExecutionContext {
+            compose_files: project.compose_files.iter().map(PathBuf::from).collect(),
+            enabled_profiles: settings.enabled_profiles,
+            working_directory: PathBuf::from(&project.working_directory),
+        })
     }
 
     pub async fn import_project(&mut self, paths: Vec<String>) -> Result<(), RuntimeError> {
@@ -920,6 +951,24 @@ mod tests {
         assert!(!projects[0].services[1].bulk_selected);
         assert_eq!(reloaded.preferences().language, Locale::Pl);
         assert_eq!(reloaded.preferences().theme, ThemePreference::Dark);
+        let _ = fs::remove_file(&catalog.configuration_path);
+    }
+
+    #[test]
+    fn exposes_only_safe_compose_execution_metadata() {
+        let mut catalog = catalog();
+        catalog.upsert_project(definition());
+        catalog
+            .set_project_profiles("compose:zerniki", vec!["test".to_owned()])
+            .expect("profiles should persist");
+
+        let context = catalog
+            .execution_context("compose:zerniki")
+            .expect("stored project should expose its execution context");
+
+        assert_eq!(context.compose_files, source().compose_files);
+        assert_eq!(context.working_directory, source().working_directory);
+        assert_eq!(context.enabled_profiles, vec!["test"]);
         let _ = fs::remove_file(&catalog.configuration_path);
     }
 }

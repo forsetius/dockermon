@@ -351,6 +351,21 @@ input:disabled {
   padding: 24px;
 }
 
+.global-stop-progress {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 16px;
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--danger) 38%, var(--border));
+  border-radius: 9px;
+  color: var(--danger);
+  background: var(--danger-soft);
+  font-size: 0.84rem;
+  font-weight: 650;
+}
+
 .projects-view,
 .secondary-view,
 .settings-view {
@@ -1264,6 +1279,22 @@ input:disabled {
 
 .toast button:hover {
   background: var(--panel-hover);
+}
+
+.toast-content {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.toast-content ul {
+  max-height: 132px;
+  margin: 0;
+  padding-left: 18px;
+  overflow: auto;
+  color: var(--muted);
+  font-weight: 500;
+  line-height: 1.45;
 }
 
 @container service-table-shell (max-width: 860px) {

@@ -2,10 +2,10 @@
 
 Dockermon is a focused desktop monitor for local Docker development projects on Zorin OS.
 
-The project is being delivered in acceptance-gated stages. The desktop application now monitors the
-local Docker Engine through a read-only production runtime. The browser build continues to use the
-deterministic test runtime so the complete interface can be developed without changing local Docker
-resources.
+The project is being delivered in acceptance-gated stages. The desktop application monitors and
+controls the local Docker Engine through a production runtime. The browser build continues to use
+the deterministic test runtime so the complete interface can be developed without changing local
+Docker resources.
 
 ## Prerequisites on Zorin OS 18
 
@@ -45,6 +45,10 @@ Run the frontend without the desktop shell with `pnpm dev`.
 The browser build uses the same deterministic test data automatically. Append `?scenario=loading`,
 `?scenario=empty`, or `?scenario=error` to inspect non-happy-path states.
 
+On Linux, Dockermon selects the KSNI tray backend. Unlike the AppIndicator compatibility backend,
+KSNI exports each service action icon through the StatusNotifier menu protocol, so GNOME-based
+desktops can render it alongside the service name.
+
 Dockermon stores its versioned configuration in
 `$XDG_CONFIG_HOME/dockermon/config.json` or `~/.config/dockermon/config.json`. The file contains
 Compose paths, enabled profiles, active projects, bulk selections, language, and theme. Resolved
@@ -82,8 +86,8 @@ environment variables and other Compose secrets are neither stored nor sent to t
 - Ports and resource usage are aggregated across every container belonging to a Compose service.
 - Missing access to the Docker socket and Engine disconnections are shown in the interface without
   terminating the application. Reconnection uses a bounded backoff.
-- Lifecycle actions and logs remain disabled in the production runtime until stages 4 and 5. The
-  deterministic browser runtime continues to expose them for interface testing.
+- Logs remain disabled in the production runtime until stage 5. The deterministic browser runtime
+  continues to expose them for interface testing.
 
 ## Stage 3 acceptance
 
@@ -100,3 +104,19 @@ json` while retaining only safe catalog metadata.
   for project bulk actions by default.
 - Active projects, profile choices, bulk selections, theme, and language persist across restarts.
 - The tray shows active projects, or all projects with a neutral icon when none are active.
+
+## Stage 4 acceptance
+
+- Compose services start with `docker compose up -d`, stop, restart, and resume using the stored
+  ordered Compose files, working directory, and enabled profiles. Commands are executed with
+  separate arguments and never through a shell.
+- Standalone containers are controlled directly through the Docker Engine API.
+- Only one lifecycle operation can run in a project at a time. Operations in different projects can
+  run concurrently, while the affected project's controls remain disabled.
+- Project bulk actions include only services selected in that project and included by its active
+  profiles.
+- **Stop all** obtains a fresh Engine inventory and stops every running or paused container,
+  including inactive and unknown Compose projects and standalone containers. It never removes
+  containers, networks, or volumes and never runs `docker compose down`.
+- Global stopping uses bounded concurrency, blocks other lifecycle actions, shows progress, and
+  reports both the stopped count and individual container failures.

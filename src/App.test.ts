@@ -33,6 +33,37 @@ describe('App', () => {
     });
   });
 
+  it('keeps lifecycle actions available in other projects while one project is busy', async () => {
+    const runtimeClient = new TestRuntimeClient({ latency: 40 });
+    render(App, { runtimeClient });
+    const storefront = await screen.findByTestId('project-storefront');
+    const localApi = screen.getByTestId('project-api-local');
+
+    await fireEvent.click(within(storefront).getByRole('button', { name: 'Stop selected' }));
+
+    expect(within(storefront).getByRole('button', { name: 'Stop selected' })).toBeDisabled();
+    expect(within(localApi).getByRole('button', { name: 'Start selected' })).toBeEnabled();
+  });
+
+  it('blocks lifecycle actions and reports partial failures during a global stop', async () => {
+    const runtimeClient = new TestRuntimeClient({
+      globalStopFailures: ['storefront-web'],
+      latency: 30,
+    });
+    render(App, { runtimeClient });
+    const project = await screen.findByTestId('project-storefront');
+
+    const stopPromise = runtimeClient.stopAll();
+
+    expect(await screen.findByText('Preparing to stop all containers…')).toBeInTheDocument();
+    expect(within(project).getByRole('button', { name: 'Stop selected' })).toBeDisabled();
+    await stopPromise;
+
+    expect(await screen.findByText('Stopped 7 of 8 containers.')).toBeInTheDocument();
+    expect(screen.getByText('Could not stop web.')).toBeInTheDocument();
+    expect(within(project).getByRole('button', { name: 'Stop selected' })).toBeEnabled();
+  });
+
   it('disables actions that the connected runtime does not support', async () => {
     render(App, {
       runtimeClient: new TestRuntimeClient({
