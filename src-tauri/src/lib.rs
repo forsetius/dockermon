@@ -1,3 +1,4 @@
+mod docker_runtime;
 mod runtime;
 mod state;
 mod tray;
@@ -7,25 +8,26 @@ use runtime::{
     ServiceLogSnapshot, ThemePreference,
 };
 use state::StateCoordinator;
+use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, Runtime, State, WindowEvent};
 
 #[tauri::command]
-fn application_snapshot(
+async fn application_snapshot(
     coordinator: State<'_, StateCoordinator>,
 ) -> Result<ApplicationSnapshot, RuntimeError> {
-    coordinator.snapshot()
+    coordinator.snapshot().await
 }
 
 #[tauri::command]
-fn service_logs(
+async fn service_logs(
     coordinator: State<'_, StateCoordinator>,
     service_id: String,
 ) -> Result<ServiceLogSnapshot, RuntimeError> {
-    coordinator.logs(&service_id)
+    coordinator.logs(&service_id).await
 }
 
 #[tauri::command]
-fn run_project_action(
+async fn run_project_action(
     app: AppHandle,
     coordinator: State<'_, StateCoordinator>,
     project_id: String,
@@ -36,10 +38,11 @@ fn run_project_action(
         &coordinator,
         RuntimeOperation::RunProjectAction { action, project_id },
     )
+    .await
 }
 
 #[tauri::command]
-fn run_service_action(
+async fn run_service_action(
     app: AppHandle,
     coordinator: State<'_, StateCoordinator>,
     service_id: String,
@@ -50,10 +53,11 @@ fn run_service_action(
         &coordinator,
         RuntimeOperation::RunServiceAction { action, service_id },
     )
+    .await
 }
 
 #[tauri::command]
-fn set_bulk_selected(
+async fn set_bulk_selected(
     app: AppHandle,
     coordinator: State<'_, StateCoordinator>,
     project_id: String,
@@ -69,10 +73,11 @@ fn set_bulk_selected(
             service_id,
         },
     )
+    .await
 }
 
 #[tauri::command]
-fn set_project_active(
+async fn set_project_active(
     app: AppHandle,
     coordinator: State<'_, StateCoordinator>,
     project_id: String,
@@ -83,40 +88,41 @@ fn set_project_active(
         &coordinator,
         RuntimeOperation::SetProjectActive { active, project_id },
     )
+    .await
 }
 
 #[tauri::command]
-fn set_language(
+async fn set_language(
     app: AppHandle,
     coordinator: State<'_, StateCoordinator>,
     language: Locale,
 ) -> Result<ApplicationSnapshot, RuntimeError> {
-    apply_operation(&app, &coordinator, RuntimeOperation::SetLanguage(language))
+    apply_operation(&app, &coordinator, RuntimeOperation::SetLanguage(language)).await
 }
 
 #[tauri::command]
-fn set_theme(
+async fn set_theme(
     app: AppHandle,
     coordinator: State<'_, StateCoordinator>,
     theme: ThemePreference,
 ) -> Result<ApplicationSnapshot, RuntimeError> {
-    apply_operation(&app, &coordinator, RuntimeOperation::SetTheme(theme))
+    apply_operation(&app, &coordinator, RuntimeOperation::SetTheme(theme)).await
 }
 
 #[tauri::command]
-fn stop_all(
+async fn stop_all(
     app: AppHandle,
     coordinator: State<'_, StateCoordinator>,
 ) -> Result<ApplicationSnapshot, RuntimeError> {
-    apply_operation(&app, &coordinator, RuntimeOperation::StopAll)
+    apply_operation(&app, &coordinator, RuntimeOperation::StopAll).await
 }
 
-fn apply_operation<R: Runtime>(
+async fn apply_operation<R: Runtime>(
     app: &AppHandle<R>,
     coordinator: &StateCoordinator,
     operation: RuntimeOperation,
 ) -> Result<ApplicationSnapshot, RuntimeError> {
-    let snapshot = coordinator.execute(operation)?;
+    let snapshot = coordinator.execute(operation).await?;
     let _ = tray::refresh_tray(app, &snapshot);
     let _ = app.emit("state-changed", snapshot.clone());
     Ok(snapshot)
@@ -138,7 +144,7 @@ pub fn run() {
                 show_main_window(app);
             },
         ))
-        .manage(StateCoordinator::test())
+        .manage(StateCoordinator::docker())
         .invoke_handler(tauri::generate_handler![
             application_snapshot,
             run_project_action,
@@ -151,11 +157,29 @@ pub fn run() {
             stop_all,
         ])
         .setup(|app| {
-            let snapshot = app
-                .state::<StateCoordinator>()
-                .snapshot()
-                .map_err(|error| format!("failed to initialize test runtime: {}", error.code))?;
+            let coordinator = app.state::<StateCoordinator>().inner().clone();
+            let snapshot = tauri::async_runtime::block_on(async {
+                let _ = coordinator.synchronize(true).await;
+                coordinator.snapshot().await
+            })
+            .map_err(|error| format!("failed to initialize Docker runtime: {}", error.code))?;
             tray::build_tray(app.handle(), &snapshot)?;
+
+            let publisher_app = app.handle().clone();
+            let publish = Arc::new(move |snapshot: ApplicationSnapshot, refresh_tray: bool| {
+                if refresh_tray {
+                    let _ = tray::refresh_tray(&publisher_app, &snapshot);
+                }
+                let _ = publisher_app.emit("state-changed", snapshot);
+            });
+            let visibility_app = app.handle().clone();
+            let window_is_visible = Arc::new(move || {
+                visibility_app
+                    .get_webview_window("main")
+                    .and_then(|window| window.is_visible().ok())
+                    .unwrap_or(false)
+            });
+            coordinator.start_monitoring(publish, window_is_visible);
             Ok(())
         })
         .on_window_event(|window, event| {

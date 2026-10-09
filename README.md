@@ -2,9 +2,10 @@
 
 Dockermon is a focused desktop monitor for local Docker development projects on Zorin OS.
 
-The project is being delivered in acceptance-gated stages. Stage 1 provides the complete application
-interface and native tray behavior through a deterministic test runtime. It does not connect to Docker
-yet.
+The project is being delivered in acceptance-gated stages. The desktop application now monitors the
+local Docker Engine through a read-only production runtime. The browser build continues to use the
+deterministic test runtime so the complete interface can be developed without changing local Docker
+resources.
 
 ## Prerequisites on Zorin OS 18
 
@@ -63,3 +64,18 @@ The browser build uses the same deterministic test data automatically. Append `?
   and closes with `Escape`.
 - System, light, and dark themes and Polish and English interface languages change without restart.
 - Loading, empty, and error states are available and the layout adapts to narrow windows.
+
+## Stage 2 acceptance
+
+- The desktop application connects to the system Docker Engine through `/var/run/docker.sock`.
+- Compose containers are grouped by their project and service labels; containers without Compose
+  labels appear in the **Containers** view.
+- Container events update status without a manual refresh, with a full reconciliation every 30
+  seconds.
+- CPU and memory are sampled every two seconds while the main window is visible. Status monitoring
+  continues while the window is hidden.
+- Ports and resource usage are aggregated across every container belonging to a Compose service.
+- Missing access to the Docker socket and Engine disconnections are shown in the interface without
+  terminating the application. Reconnection uses a bounded backoff.
+- Lifecycle actions and logs remain disabled in the production runtime until stages 4 and 5. The
+  deterministic browser runtime continues to expose them for interface testing.

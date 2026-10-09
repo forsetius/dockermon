@@ -33,6 +33,22 @@ describe('App', () => {
     });
   });
 
+  it('disables actions that the connected runtime does not support', async () => {
+    render(App, {
+      runtimeClient: new TestRuntimeClient({
+        capabilities: { lifecycleActions: false, logs: false },
+        latency: 0,
+      }),
+    });
+    const project = await screen.findByTestId('project-storefront');
+
+    expect(within(project).getByRole('button', { name: 'Start selected' })).toBeDisabled();
+    expect(within(project).getByRole('button', { name: 'Stop selected' })).toBeDisabled();
+    expect(within(project).getByRole('button', { name: 'Stop web' })).toBeDisabled();
+    expect(within(project).getByRole('button', { name: 'Restart web' })).toBeDisabled();
+    expect(within(project).getByRole('button', { name: 'Show logs for web' })).toBeDisabled();
+  });
+
   it('changes the theme and language without restarting', async () => {
     renderApplication();
     await screen.findByRole('heading', { name: 'Local projects' });

@@ -2,6 +2,7 @@ import type {
   ApplicationSnapshot,
   Locale,
   ProjectAction,
+  RuntimeCapabilities,
   ServiceAction,
   ServiceLogSnapshot,
   ThemePreference,
@@ -13,6 +14,7 @@ import { createFixtureSnapshot, fixtureLogs } from './fixtures';
 export type TestScenario = 'ready' | 'empty' | 'error' | 'loading';
 
 interface TestRuntimeOptions {
+  capabilities?: Partial<RuntimeCapabilities>;
   latency?: number;
   scenario?: TestScenario;
 }
@@ -29,6 +31,10 @@ export class TestRuntimeClient implements RuntimeClient {
   constructor(options: TestRuntimeOptions = {}) {
     this.latency = options.latency ?? 180;
     this.scenario = options.scenario ?? 'ready';
+    this.snapshot.capabilities = {
+      ...this.snapshot.capabilities,
+      ...options.capabilities,
+    };
 
     if (this.scenario === 'empty') {
       this.snapshot.projects = [];

@@ -135,9 +135,13 @@
     busyServiceId = service.id;
     try {
       snapshot = await runtimeClient.runServiceAction(service.id, action);
-      const actionKey: TranslationKey =
-        action === 'start' ? 'action.start' : action === 'stop' ? 'action.stop' : 'action.restart';
-      showSuccess(service.name, translate(locale, actionKey, { service: service.name }));
+      const actionKeys: Record<ServiceAction, TranslationKey> = {
+        restart: 'action.restart',
+        resume: 'action.resume',
+        start: 'action.start',
+        stop: 'action.stop',
+      };
+      showSuccess(service.name, translate(locale, actionKeys[action], { service: service.name }));
     } catch {
       showError();
     } finally {
@@ -221,7 +225,9 @@
                 <ProjectPanel
                   {busyProjectId}
                   {busyServiceId}
+                  lifecycleActionsEnabled={snapshot.capabilities.lifecycleActions}
                   {locale}
+                  logsEnabled={snapshot.capabilities.logs}
                   onactive={(active) => updateProjectActive(project.id, active)}
                   onbulk={(service, selected) => updateBulkSelection(project.id, service, selected)}
                   onlogs={openLogs}
@@ -245,8 +251,10 @@
           {:else}
             <div class="standalone-panel">
               <ServiceTable
+                actionsEnabled={snapshot.capabilities.lifecycleActions}
                 {busyServiceId}
                 {locale}
+                logsEnabled={snapshot.capabilities.logs}
                 onaction={runServiceAction}
                 onlogs={openLogs}
                 {selectedServiceId}

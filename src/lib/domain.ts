@@ -2,12 +2,12 @@ export type Locale = 'en' | 'pl';
 
 export type ThemePreference = 'system' | 'light' | 'dark';
 
-export type ConnectionStatus = 'connected' | 'connecting' | 'disconnected';
+export type ConnectionStatus = 'connected' | 'connecting' | 'disconnected' | 'permission-denied';
 
 export type ServiceStatus =
   'not-created' | 'stopped' | 'starting' | 'running' | 'healthy' | 'unhealthy' | 'paused' | 'error';
 
-export type ServiceAction = 'start' | 'stop' | 'restart';
+export type ServiceAction = 'start' | 'stop' | 'restart' | 'resume';
 
 export type ProjectAction = 'start-selected' | 'stop-selected';
 
@@ -43,8 +43,14 @@ export interface ActivityEntry {
   successful: boolean;
 }
 
+export interface RuntimeCapabilities {
+  lifecycleActions: boolean;
+  logs: boolean;
+}
+
 export interface ApplicationSnapshot {
   activity: ActivityEntry[];
+  capabilities: RuntimeCapabilities;
   connection: ConnectionStatus;
   globalStopInProgress: boolean;
   preferences: Preferences;

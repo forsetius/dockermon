@@ -18,6 +18,7 @@
     connected: 'connection.connected',
     connecting: 'connection.connecting',
     disconnected: 'connection.disconnected',
+    'permission-denied': 'connection.permissionDenied',
   };
 
   const minimize = async (): Promise<void> => {

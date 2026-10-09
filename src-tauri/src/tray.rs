@@ -1,11 +1,15 @@
 use crate::{
-    runtime::{ApplicationSnapshot, Locale, RuntimeOperation, ServiceAction, ServiceSnapshot},
+    runtime::{
+        ApplicationSnapshot, Locale, RuntimeOperation, ServiceAction, ServiceSnapshot,
+        ServiceStatus,
+    },
     show_main_window,
     state::StateCoordinator,
 };
 use tauri::{
     AppHandle, Emitter, Manager, Runtime,
-    menu::{Menu, MenuItem, PredefinedMenuItem, Submenu},
+    image::Image,
+    menu::{IconMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu},
     tray::TrayIconBuilder,
 };
 
@@ -66,9 +70,12 @@ fn create_menu<R: Runtime>(
         )?;
 
         for service in &project.services {
-            let service_menu = Submenu::new(app, &service.name, true)?;
-            append_service_actions(app, &service_menu, service, snapshot.preferences.language)?;
-            project_menu.append(&service_menu)?;
+            append_service_action(
+                app,
+                &project_menu,
+                service,
+                snapshot.capabilities.lifecycle_actions && !snapshot.global_stop_in_progress,
+            )?;
         }
 
         menu.append(&project_menu)?;
@@ -83,7 +90,7 @@ fn create_menu<R: Runtime>(
             "Stop all",
             "Zatrzymaj wszystko",
         ),
-        !snapshot.global_stop_in_progress,
+        snapshot.capabilities.lifecycle_actions && !snapshot.global_stop_in_progress,
         None::<&str>,
     )?)?;
     menu.append(&PredefinedMenuItem::separator(app)?)?;
@@ -105,38 +112,121 @@ fn create_menu<R: Runtime>(
     Ok(menu)
 }
 
-fn append_service_actions<R: Runtime>(
+fn append_service_action<R: Runtime>(
     app: &AppHandle<R>,
     menu: &Submenu<R>,
     service: &ServiceSnapshot,
-    language: Locale,
+    enabled: bool,
 ) -> tauri::Result<()> {
-    if service.status.is_ready() {
-        menu.append(&MenuItem::with_id(
-            app,
-            format!("service|{}|stop", service.id),
-            text(language, "Stop", "Zatrzymaj"),
-            true,
-            None::<&str>,
-        )?)?;
-        menu.append(&MenuItem::with_id(
-            app,
-            format!("service|{}|restart", service.id),
-            text(language, "Restart", "Uruchom ponownie"),
-            true,
-            None::<&str>,
-        )?)?;
-    } else {
-        menu.append(&MenuItem::with_id(
-            app,
-            format!("service|{}|start", service.id),
-            text(language, "Start", "Uruchom"),
-            true,
-            None::<&str>,
-        )?)?;
-    }
+    let action = service_action(service.status);
+    menu.append(&IconMenuItem::with_id(
+        app,
+        format!("service|{}|{}", service.id, action_id(action)),
+        &service.name,
+        enabled,
+        Some(action_icon(action)),
+        None::<&str>,
+    )?)?;
 
     Ok(())
+}
+
+fn service_action(status: ServiceStatus) -> ServiceAction {
+    match status {
+        ServiceStatus::NotCreated | ServiceStatus::Stopped | ServiceStatus::Error => {
+            ServiceAction::Start
+        }
+        ServiceStatus::Starting | ServiceStatus::Running | ServiceStatus::Healthy => {
+            ServiceAction::Stop
+        }
+        ServiceStatus::Unhealthy => ServiceAction::Restart,
+        ServiceStatus::Paused => ServiceAction::Resume,
+    }
+}
+
+fn action_id(action: ServiceAction) -> &'static str {
+    match action {
+        ServiceAction::Start => "start",
+        ServiceAction::Stop => "stop",
+        ServiceAction::Restart => "restart",
+        ServiceAction::Resume => "resume",
+    }
+}
+
+fn action_icon(action: ServiceAction) -> Image<'static> {
+    const ICON_SIZE: usize = 16;
+    const START_ICON: [&str; ICON_SIZE] = [
+        "................",
+        "................",
+        ".....#..........",
+        ".....##.........",
+        ".....###........",
+        ".....####.......",
+        ".....#####......",
+        ".....######.....",
+        ".....######.....",
+        ".....#####......",
+        ".....####.......",
+        ".....###........",
+        ".....##.........",
+        ".....#..........",
+        "................",
+        "................",
+    ];
+    const STOP_ICON: [&str; ICON_SIZE] = [
+        "................",
+        "................",
+        "................",
+        "................",
+        "....########....",
+        "....########....",
+        "....########....",
+        "....########....",
+        "....########....",
+        "....########....",
+        "....########....",
+        "....########....",
+        "................",
+        "................",
+        "................",
+        "................",
+    ];
+    const RESTART_ICON: [&str; ICON_SIZE] = [
+        "................",
+        "................",
+        "......####......",
+        "....##....##....",
+        "...##......##...",
+        "..##........##..",
+        "..##.....#####..",
+        "..##......####..",
+        "..##........##..",
+        "...##......##...",
+        "....##....##....",
+        "......####......",
+        "................",
+        "................",
+        "................",
+        "................",
+    ];
+
+    let (mask, color) = match action {
+        ServiceAction::Start | ServiceAction::Resume => (&START_ICON, [45, 145, 248, 255]),
+        ServiceAction::Stop => (&STOP_ICON, [255, 82, 94, 255]),
+        ServiceAction::Restart => (&RESTART_ICON, [45, 145, 248, 255]),
+    };
+    let mut rgba = vec![0; ICON_SIZE * ICON_SIZE * 4];
+
+    for (y, row) in mask.iter().enumerate() {
+        for (x, pixel) in row.bytes().enumerate() {
+            if pixel == b'#' {
+                let offset = (y * ICON_SIZE + x) * 4;
+                rgba[offset..offset + 4].copy_from_slice(&color);
+            }
+        }
+    }
+
+    Image::new_owned(rgba, ICON_SIZE as u32, ICON_SIZE as u32)
 }
 
 fn visible_projects(snapshot: &ApplicationSnapshot) -> Vec<&crate::runtime::ProjectSnapshot> {
@@ -163,6 +253,7 @@ fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, event: tauri::menu::MenuEve
                     "start" => Some(ServiceAction::Start),
                     "stop" => Some(ServiceAction::Stop),
                     "restart" => Some(ServiceAction::Restart),
+                    "resume" => Some(ServiceAction::Resume),
                     _ => None,
                 };
                 if let Some(action) = action {
@@ -181,11 +272,14 @@ fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, event: tauri::menu::MenuEve
 }
 
 fn apply_tray_operation<R: Runtime>(app: &AppHandle<R>, operation: RuntimeOperation) {
-    let coordinator = app.state::<StateCoordinator>();
-    if let Ok(snapshot) = coordinator.execute(operation) {
-        let _ = refresh_tray(app, &snapshot);
-        let _ = app.emit("state-changed", snapshot);
-    }
+    let coordinator = app.state::<StateCoordinator>().inner().clone();
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        if let Ok(snapshot) = coordinator.execute(operation).await {
+            let _ = refresh_tray(&app, &snapshot);
+            let _ = app.emit("state-changed", snapshot);
+        }
+    });
 }
 
 fn text<'a>(language: Locale, english: &'a str, polish: &'a str) -> &'a str {
@@ -197,14 +291,31 @@ fn text<'a>(language: Locale, english: &'a str, polish: &'a str) -> &'a str {
 
 #[cfg(test)]
 mod tests {
-    use super::visible_projects;
-    use crate::runtime::RuntimeSupervisor;
-    use crate::runtime::TestRuntimeSupervisor;
+    use super::{service_action, visible_projects};
+    use crate::runtime::{RuntimeSupervisor, ServiceAction, ServiceStatus, TestRuntimeSupervisor};
+
+    #[test]
+    fn tray_assigns_exactly_one_action_to_each_service_status() {
+        assert_eq!(
+            service_action(ServiceStatus::NotCreated),
+            ServiceAction::Start
+        );
+        assert_eq!(service_action(ServiceStatus::Stopped), ServiceAction::Start);
+        assert_eq!(service_action(ServiceStatus::Starting), ServiceAction::Stop);
+        assert_eq!(service_action(ServiceStatus::Running), ServiceAction::Stop);
+        assert_eq!(service_action(ServiceStatus::Healthy), ServiceAction::Stop);
+        assert_eq!(
+            service_action(ServiceStatus::Unhealthy),
+            ServiceAction::Restart
+        );
+        assert_eq!(service_action(ServiceStatus::Paused), ServiceAction::Resume);
+        assert_eq!(service_action(ServiceStatus::Error), ServiceAction::Start);
+    }
 
     #[test]
     fn tray_uses_only_active_projects_when_any_are_active() {
         let supervisor = TestRuntimeSupervisor::new();
-        let snapshot = supervisor.snapshot().expect("fixture snapshot should load");
+        let snapshot = run(supervisor.snapshot()).expect("fixture snapshot should load");
 
         let visible: Vec<_> = visible_projects(&snapshot)
             .into_iter()
@@ -217,11 +328,19 @@ mod tests {
     #[test]
     fn tray_uses_all_projects_when_none_are_active() {
         let supervisor = TestRuntimeSupervisor::new();
-        let mut snapshot = supervisor.snapshot().expect("fixture snapshot should load");
+        let mut snapshot = run(supervisor.snapshot()).expect("fixture snapshot should load");
         for project in &mut snapshot.projects {
             project.active = false;
         }
 
         assert_eq!(visible_projects(&snapshot).len(), snapshot.projects.len());
+    }
+
+    fn run<F: std::future::Future>(future: F) -> F::Output {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("test runtime should build")
+            .block_on(future)
     }
 }

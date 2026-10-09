@@ -310,6 +310,7 @@ input:disabled {
 }
 
 .connection-dot.disconnected,
+.connection-dot.permission-denied,
 .status-dot.stopped,
 .status-dot.error,
 .status-dot.unhealthy,
@@ -353,7 +354,7 @@ input:disabled {
 .projects-view,
 .secondary-view,
 .settings-view {
-  width: min(1120px, 100%);
+  width: 100%;
   margin: 0 auto;
 }
 
@@ -518,6 +519,12 @@ input:disabled {
   overflow-x: auto;
 }
 
+.project-table-wrap,
+.standalone-panel {
+  container-name: service-table-shell;
+  container-type: inline-size;
+}
+
 .select-all-control {
   position: absolute;
   z-index: 1;
@@ -526,10 +533,15 @@ input:disabled {
 }
 
 .service-table {
+  --service-columns: 42px minmax(108px, 1.22fr) minmax(112px, 1fr) 70px 90px minmax(112px, 1fr)
+    166px;
+
   min-width: 790px;
 }
 
 .service-table.no-bulk {
+  --service-columns: minmax(130px, 1.3fr) minmax(120px, 1fr) 80px 100px minmax(150px, 1fr) 166px;
+
   min-width: 740px;
 }
 
@@ -537,14 +549,12 @@ input:disabled {
   display: grid;
   min-height: 44px;
   align-items: center;
-  grid-template-columns:
-    42px minmax(108px, 1.22fr) minmax(112px, 1fr) 70px 90px minmax(112px, 1fr)
-    166px;
+  grid-template-columns: var(--service-columns);
   border-bottom: 1px solid var(--border);
 }
 
 .service-table.no-bulk .service-row {
-  grid-template-columns: minmax(130px, 1.3fr) minmax(120px, 1fr) 80px 100px minmax(150px, 1fr) 166px;
+  grid-template-columns: var(--service-columns);
 }
 
 .service-row:last-child {
@@ -1103,6 +1113,63 @@ input:disabled {
   background: var(--panel-hover);
 }
 
+@container service-table-shell (max-width: 860px) {
+  .service-table {
+    --service-columns: 42px minmax(108px, 1.22fr) minmax(112px, 1fr) 70px 90px 166px;
+
+    min-width: 620px;
+  }
+
+  .service-table.no-bulk {
+    --service-columns: minmax(130px, 1.3fr) minmax(120px, 1fr) 80px 100px 166px;
+
+    min-width: 570px;
+  }
+
+  .ports-column {
+    display: none;
+  }
+}
+
+@container service-table-shell (max-width: 700px) {
+  .service-table {
+    --service-columns: 42px minmax(108px, 1.22fr) minmax(112px, 1fr) 70px 166px;
+
+    min-width: 530px;
+  }
+
+  .service-table.no-bulk {
+    --service-columns: minmax(130px, 1.3fr) minmax(120px, 1fr) 80px 166px;
+
+    min-width: 480px;
+  }
+
+  .resource-memory,
+  .ports-column {
+    display: none;
+  }
+}
+
+@container service-table-shell (max-width: 620px) {
+  .service-table {
+    --service-columns: 42px minmax(108px, 1.22fr) minmax(112px, 1fr) 166px;
+
+    min-width: 460px;
+  }
+
+  .service-table.no-bulk {
+    --service-columns: minmax(130px, 1.3fr) minmax(120px, 1fr) 166px;
+
+    min-width: 410px;
+  }
+
+  .resource-cpu,
+  .resource-memory,
+  .ports-column {
+    display: none;
+  }
+}
+
 @media (min-width: 1280px) {
   .app-shell.drawer-open .content-area,
   .app-shell.drawer-open .window-header {
@@ -1112,10 +1179,6 @@ input:disabled {
   .app-shell.drawer-open .content-area {
     padding-right: 16px;
     padding-left: 16px;
-  }
-
-  .app-shell.drawer-open .service-table {
-    min-width: 700px;
   }
 }
 
@@ -1322,6 +1385,12 @@ input:disabled {
 
   .row-actions {
     padding-top: 4px;
+  }
+
+  .resource-cpu,
+  .resource-memory,
+  .ports-column {
+    display: none;
   }
 
   .settings-list fieldset,
