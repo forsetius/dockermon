@@ -3,5 +3,6 @@ dist/
 coverage/
 src-tauri/target/
 src-tauri/gen/schemas/
+.impeccable/review/
 .DS_Store
 *.log
