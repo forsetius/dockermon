@@ -96,6 +96,18 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: 'Projekty' })).toBeInTheDocument();
   });
 
+  it('collapses and expands the sidebar from the window header', async () => {
+    renderApplication();
+    await screen.findByRole('heading', { name: 'Local projects' });
+    const appShell = document.querySelector<HTMLElement>('.app-shell');
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }));
+    expect(appShell).toHaveClass('sidebar-collapsed');
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Expand sidebar' }));
+    expect(appShell).not.toHaveClass('sidebar-collapsed');
+  });
+
   it('imports a Compose project and enables an optional profile', async () => {
     renderApplication();
     await screen.findByRole('heading', { name: 'Local projects' });
@@ -214,7 +226,7 @@ describe('App', () => {
     runtimeClient.emitServiceLogLines('api-local-api', ['live-before-clear']);
     await waitFor(() => expect(logOutput.value).toContain('live-before-clear'));
 
-    await fireEvent.click(within(drawer).getByRole('button', { name: 'Clear view' }));
+    await fireEvent.click(within(drawer).getByRole('button', { name: 'Clear' }));
     expect(logOutput.value).toBe('');
     runtimeClient.emitServiceLogLines('api-local-api', ['live-after-clear']);
     await waitFor(() => expect(logOutput.value).toBe('live-after-clear'));

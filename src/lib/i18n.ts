@@ -2,7 +2,7 @@ import type { Locale } from './domain';
 
 const english = {
   'action.close': 'Close',
-  'action.clear': 'Clear view',
+  'action.clear': 'Clear',
   'action.logs': 'Show logs for {service}',
   'action.maximize': 'Maximize or restore',
   'action.minimize': 'Minimize',
@@ -34,7 +34,7 @@ const english = {
   'containers.description': 'Standalone containers that are not part of a Compose project.',
   'containers.empty': 'No standalone containers were detected.',
   'containers.title': 'Containers',
-  'drawer.follow': 'Follow live',
+  'drawer.follow': 'Follow',
   'drawer.empty': 'Waiting for log output…',
   'drawer.resize': 'Resize log drawer',
   'drawer.resizeHint': 'Drag to resize. Use arrow keys for precise control.',
@@ -97,6 +97,8 @@ const english = {
   'service.name': 'Service',
   'service.ports': 'Ports',
   'service.status': 'Status',
+  'sidebar.collapse': 'Collapse sidebar',
+  'sidebar.expand': 'Expand sidebar',
   'settings.description': 'Appearance and interface language change immediately.',
   'settings.language': 'Interface language',
   'settings.theme': 'Appearance',
@@ -121,7 +123,7 @@ type TranslationKey = keyof typeof english;
 
 const polish: Record<TranslationKey, string> = {
   'action.close': 'Zamknij',
-  'action.clear': 'Wyczyść widok',
+  'action.clear': 'Wyczyść',
   'action.logs': 'Pokaż logi serwisu {service}',
   'action.maximize': 'Maksymalizuj lub przywróć',
   'action.minimize': 'Minimalizuj',
@@ -153,7 +155,7 @@ const polish: Record<TranslationKey, string> = {
   'containers.description': 'Kontenery standalone, które nie należą do projektu Compose.',
   'containers.empty': 'Nie wykryto kontenerów standalone.',
   'containers.title': 'Kontenery',
-  'drawer.follow': 'Śledź na żywo',
+  'drawer.follow': 'Śledzenie',
   'drawer.empty': 'Oczekiwanie na logi…',
   'drawer.resize': 'Zmień szerokość szuflady logów',
   'drawer.resizeHint': 'Przeciągnij, aby zmienić szerokość. Użyj strzałek do precyzyjnej zmiany.',
@@ -215,6 +217,8 @@ const polish: Record<TranslationKey, string> = {
   'service.name': 'Serwis',
   'service.ports': 'Porty',
   'service.status': 'Stan',
+  'sidebar.collapse': 'Zwiń panel boczny',
+  'sidebar.expand': 'Rozwiń panel boczny',
   'settings.description': 'Wygląd i język interfejsu zmieniają się natychmiast.',
   'settings.language': 'Język interfejsu',
   'settings.theme': 'Wygląd',

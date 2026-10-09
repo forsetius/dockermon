@@ -131,3 +131,6 @@ json` while retaining only safe catalog metadata.
   application cancels the previous Docker log subscription.
 - On desktop, the drawer width can be changed by dragging its left edge or by focusing the separator
   and using the arrow keys. Double-clicking the separator restores the 560px default width.
+- The desktop sidebar can be collapsed manually to an icon rail. When the projects workspace becomes
+  narrower than 900px, project bulk actions switch to icon-only controls while keeping localized
+  accessible names and tooltips.

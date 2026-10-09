@@ -187,13 +187,19 @@ input:disabled {
 }
 
 .app-shell {
+  --sidebar-width: 210px;
+
   display: grid;
   width: 100vw;
   height: 100vh;
-  grid-template-columns: 210px minmax(0, 1fr);
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
   grid-template-rows: 62px minmax(0, 1fr);
   overflow: hidden;
   background: var(--app-background);
+}
+
+.app-shell.sidebar-collapsed {
+  --sidebar-width: 74px;
 }
 
 .sidebar {
@@ -253,6 +259,22 @@ input:disabled {
   background: var(--accent-soft);
 }
 
+.app-shell.sidebar-collapsed .brand {
+  justify-content: center;
+  padding: 0;
+}
+
+.app-shell.sidebar-collapsed .brand > span,
+.app-shell.sidebar-collapsed .sidebar nav button span,
+.app-shell.sidebar-collapsed .sample-note {
+  display: none;
+}
+
+.app-shell.sidebar-collapsed .sidebar nav button {
+  justify-content: center;
+  padding: 0;
+}
+
 .navigation-spacer {
   flex: 1;
 }
@@ -280,6 +302,37 @@ input:disabled {
   border-bottom: 1px solid var(--border);
   background: var(--header-surface);
   user-select: none;
+}
+
+.window-header-leading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+
+.sidebar-toggle {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: none;
+  place-items: center;
+  margin-left: 10px;
+  border-radius: 8px;
+  color: var(--muted);
+  background: transparent;
+}
+
+.sidebar-toggle:hover {
+  color: inherit;
+  background: var(--panel-hover);
+}
+
+.sidebar-toggle .icon {
+  transition: transform 160ms ease-out;
+}
+
+.sidebar-toggle[aria-expanded='false'] .icon {
+  transform: scaleX(-1);
 }
 
 .connection {
@@ -377,6 +430,11 @@ input:disabled {
 .settings-view {
   width: 100%;
   margin: 0 auto;
+}
+
+.projects-view {
+  container-name: projects-workspace;
+  container-type: inline-size;
 }
 
 .page-heading {
@@ -1401,6 +1459,17 @@ input:disabled {
   }
 }
 
+@container projects-workspace (max-width: 899px) {
+  .project-controls .bulk-action-button {
+    width: 36px;
+    padding: 0;
+  }
+
+  .project-controls .bulk-action-label {
+    display: none;
+  }
+}
+
 @media (min-width: 1280px) {
   .app-shell.drawer-open .content-area,
   .app-shell.drawer-open .window-header {
@@ -1415,7 +1484,7 @@ input:disabled {
 
 @media (max-width: 980px) {
   .app-shell {
-    grid-template-columns: 74px minmax(0, 1fr);
+    --sidebar-width: 74px;
   }
 
   .brand {
@@ -1434,10 +1503,8 @@ input:disabled {
     padding: 0;
   }
 
-  .project-header {
-    align-items: flex-start;
-    flex-direction: column;
-    padding: 10px 14px 12px;
+  .sidebar-toggle {
+    display: none;
   }
 
   .projects-heading {
@@ -1447,22 +1514,6 @@ input:disabled {
 
   .import-actions {
     align-self: flex-start;
-  }
-
-  .project-identity {
-    width: 100%;
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .profile-controls {
-    padding-left: 42px;
-  }
-
-  .project-controls {
-    width: 100%;
-    justify-content: flex-end;
   }
 }
 
@@ -1515,7 +1566,8 @@ input:disabled {
     padding: 7px;
   }
 
-  .sidebar nav button {
+  .sidebar nav button,
+  .app-shell.sidebar-collapsed .sidebar nav button {
     display: grid;
     min-height: 48px;
     justify-items: center;
@@ -1524,7 +1576,8 @@ input:disabled {
     font-size: 0.66rem;
   }
 
-  .sidebar nav button span {
+  .sidebar nav button span,
+  .app-shell.sidebar-collapsed .sidebar nav button span {
     display: block;
   }
 
@@ -1539,8 +1592,26 @@ input:disabled {
     display: none;
   }
 
+  .project-header {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 10px 14px 12px;
+  }
+
+  .project-identity {
+    width: 100%;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .profile-controls {
+    padding-left: 42px;
+  }
+
   .project-controls {
     display: grid;
+    width: 100%;
     grid-template-columns: 1fr 1fr auto;
   }
 
@@ -1573,6 +1644,14 @@ input:disabled {
   .danger-button {
     padding: 0 10px;
     font-size: 0.7rem;
+  }
+
+  .project-controls .bulk-action-button {
+    width: auto;
+  }
+
+  .project-controls .bulk-action-label {
+    display: inline;
   }
 
   .project-table-wrap {

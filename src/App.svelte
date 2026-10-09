@@ -32,6 +32,7 @@
   let snapshot = $state<ApplicationSnapshot | null>(null);
   let loadState = $state<'error' | 'loading' | 'ready'>('loading');
   let currentView = $state<NavigationView>('projects');
+  let sidebarCollapsed = $state(false);
   let busyProjectIds = $state<string[]>([]);
   let importInProgress = $state(false);
   let busyStandaloneServiceIds = $state<string[]>([]);
@@ -346,10 +347,16 @@
 <div
   class="app-shell"
   class:drawer-open={selectedService !== null}
+  class:sidebar-collapsed={sidebarCollapsed}
   style={`--log-drawer-width: ${logDrawerWidth}px`}
 >
   <Sidebar {currentView} {locale} onselect={(view) => (currentView = view)} />
-  <WindowHeader connection={snapshot?.connection ?? 'connecting'} {locale} />
+  <WindowHeader
+    connection={snapshot?.connection ?? 'connecting'}
+    {locale}
+    ontogglesidebar={() => (sidebarCollapsed = !sidebarCollapsed)}
+    {sidebarCollapsed}
+  />
 
   <main class="content-area">
     {#if loadState === 'loading'}
@@ -481,6 +488,7 @@
         onfollow={(follow) => (followLogs = follow)}
         onwidthchange={(width) => (logDrawerWidth = width)}
         serviceName={selectedService.name}
+        {sidebarCollapsed}
         width={logDrawerWidth}
       />
     {/key}

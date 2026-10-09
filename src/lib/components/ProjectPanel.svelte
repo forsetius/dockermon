@@ -110,22 +110,26 @@
         </span>
       </label>
       <button
-        class="primary-button"
+        aria-label={translate(locale, 'action.startSelected')}
+        class="bulk-action-button primary-button"
         disabled={!lifecycleActionsEnabled || selectedCount === 0 || busy}
         onclick={() => onprojectaction('start-selected')}
+        title={translate(locale, 'action.startSelected')}
         type="button"
       >
         <Icon name="play" size={16} />
-        {translate(locale, 'action.startSelected')}
+        <span class="bulk-action-label">{translate(locale, 'action.startSelected')}</span>
       </button>
       <button
-        class="danger-button"
+        aria-label={translate(locale, 'action.stopSelected')}
+        class="bulk-action-button danger-button"
         disabled={!lifecycleActionsEnabled || selectedCount === 0 || busy}
         onclick={() => onprojectaction('stop-selected')}
+        title={translate(locale, 'action.stopSelected')}
         type="button"
       >
         <Icon name="stop" size={15} />
-        {translate(locale, 'action.stopSelected')}
+        <span class="bulk-action-label">{translate(locale, 'action.stopSelected')}</span>
       </button>
       <ProjectActionsMenu disabled={busy} {locale} {onremove} projectName={project.name} />
     </div>

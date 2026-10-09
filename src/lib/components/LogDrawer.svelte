@@ -15,6 +15,7 @@
     onfollow,
     onwidthchange,
     serviceName,
+    sidebarCollapsed,
     width,
   }: {
     follow: boolean;
@@ -26,6 +27,7 @@
     onfollow: (follow: boolean) => void;
     onwidthchange: (width: number) => void;
     serviceName: string;
+    sidebarCollapsed: boolean;
     width: number;
   } = $props();
 
@@ -67,7 +69,9 @@
   function calculateMaximumWidth(): number {
     if (window.innerWidth <= mobileBreakpoint) return maximumAbsoluteWidth;
     const sidebarWidth =
-      window.innerWidth < compactSidebarBreakpoint ? compactSidebarWidth : desktopSidebarWidth;
+      sidebarCollapsed || window.innerWidth <= compactSidebarBreakpoint
+        ? compactSidebarWidth
+        : desktopSidebarWidth;
     return Math.max(
       minimumWidth,
       Math.min(maximumAbsoluteWidth, window.innerWidth - sidebarWidth - minimumWorkspaceWidth),
@@ -79,6 +83,8 @@
     maximumWidth = calculateMaximumWidth();
     if (width > maximumWidth) onwidthchange(maximumWidth);
   }
+
+  $effect(updateMaximumWidth);
 
   function clampWidth(nextWidth: number): number {
     return Math.min(maximumWidth, Math.max(minimumWidth, Math.round(nextWidth)));
