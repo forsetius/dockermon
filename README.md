@@ -129,8 +129,10 @@ json` while retaining only safe catalog metadata.
   lines and follows the end of the stream by default.
 - Clearing the drawer affects only the visible buffer. Closing it, changing services, or leaving the
   application cancels the previous Docker log subscription.
-- On desktop, the drawer width can be changed by dragging its left edge or by focusing the separator
-  and using the arrow keys. Double-clicking the separator restores the 560px default width.
+- With at least 1360px of usable workspace width, logs dock on the right and expose a resizable left
+  edge. In narrower desktop windows they dock at the bottom with a resizable top edge, preserving
+  horizontal room for complete log lines. Arrow keys resize the focused separator, and
+  double-clicking restores the orientation's default size.
 - The desktop sidebar can be collapsed manually to an icon rail. When the projects workspace becomes
   narrower than 900px, project bulk actions switch to icon-only controls while keeping localized
   accessible names and tooltips.

@@ -173,7 +173,7 @@ describe('App', () => {
     expect(runtimeClient.activeLogSubscriptionCount()).toBe(0);
   });
 
-  it('resizes the log drawer with pointer and keyboard controls', async () => {
+  it('resizes the right log drawer with pointer and keyboard controls', async () => {
     const originalWindowWidth = window.innerWidth;
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1920 });
     try {
@@ -209,6 +209,61 @@ describe('App', () => {
       Object.defineProperty(window, 'innerWidth', {
         configurable: true,
         value: originalWindowWidth,
+      });
+    }
+  });
+
+  it('docks logs at the bottom in a narrow workspace and resizes their height', async () => {
+    const originalWindowWidth = window.innerWidth;
+    const originalWindowHeight = window.innerHeight;
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1200 });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 900 });
+    try {
+      render(App, {
+        runtimeClient: new TestRuntimeClient({ latency: 0, logInterval: 0 }),
+      });
+      const project = await screen.findByTestId('project-api-local');
+      await fireEvent.click(within(project).getByRole('button', { name: 'Show logs for api' }));
+      const drawer = await screen.findByRole('complementary', { name: 'Logs · api' });
+      const resizeHandle = screen.getByRole('slider', { name: 'Resize log drawer' });
+      const appShell = document.querySelector<HTMLElement>('.app-shell');
+
+      expect(drawer).toHaveClass('drawer-bottom');
+      expect(resizeHandle).toHaveAttribute('aria-orientation', 'vertical');
+      await waitFor(() => expect(resizeHandle).toHaveAttribute('aria-valuemax', '558'));
+      expect(appShell?.style.getPropertyValue('--log-drawer-height')).toBe('380px');
+
+      await fireEvent.keyDown(resizeHandle, { key: 'ArrowUp' });
+      expect(appShell?.style.getPropertyValue('--log-drawer-height')).toBe('404px');
+      await fireEvent.keyDown(resizeHandle, { key: 'Home' });
+      expect(appShell?.style.getPropertyValue('--log-drawer-height')).toBe('240px');
+      await fireEvent.keyDown(resizeHandle, { key: 'End' });
+      expect(appShell?.style.getPropertyValue('--log-drawer-height')).toBe('558px');
+
+      await fireEvent.pointerDown(resizeHandle, {
+        button: 0,
+        clientY: 600,
+        pointerId: 1,
+      });
+      expect(appShell?.style.getPropertyValue('--log-drawer-height')).toBe('300px');
+      await fireEvent.pointerMove(resizeHandle, { clientY: 500, pointerId: 1 });
+      expect(appShell?.style.getPropertyValue('--log-drawer-height')).toBe('400px');
+      await fireEvent.pointerUp(resizeHandle, { clientY: 500, pointerId: 1 });
+      await fireEvent.dblClick(resizeHandle);
+      expect(appShell?.style.getPropertyValue('--log-drawer-height')).toBe('380px');
+
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1920 });
+      await fireEvent(window, new Event('resize'));
+      await waitFor(() => expect(drawer).toHaveClass('drawer-right'));
+      expect(resizeHandle).toHaveAttribute('aria-orientation', 'horizontal');
+    } finally {
+      Object.defineProperty(window, 'innerWidth', {
+        configurable: true,
+        value: originalWindowWidth,
+      });
+      Object.defineProperty(window, 'innerHeight', {
+        configurable: true,
+        value: originalWindowHeight,
       });
     }
   });

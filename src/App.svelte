@@ -27,6 +27,8 @@
   import { createRuntimeClient } from './lib/runtime/createRuntimeClient';
   import type { RuntimeClient } from './lib/runtime/RuntimeClient';
 
+  type LogDrawerDock = 'bottom' | 'right';
+
   let { runtimeClient = createRuntimeClient() }: { runtimeClient?: RuntimeClient } = $props();
 
   let snapshot = $state<ApplicationSnapshot | null>(null);
@@ -41,6 +43,8 @@
   let logsLoading = $state(false);
   let followLogs = $state(true);
   let logDrawerWidth = $state(560);
+  let logDrawerHeight = $state(380);
+  let viewportWidth = $state(window.innerWidth);
   let toast = $state<{ details?: string[]; message: string; tone: 'error' | 'success' } | null>(
     null,
   );
@@ -49,10 +53,15 @@
   let stopLogSubscription: (() => void) | undefined;
 
   const logLineLimit = 2000;
+  const wideDrawerWorkspaceThreshold = 1360;
 
   const fallbackLocale: Locale = navigator.language.toLowerCase().startsWith('pl') ? 'pl' : 'en';
   const locale = $derived(snapshot?.preferences.language ?? fallbackLocale);
   const activeCount = $derived(snapshot?.projects.filter((project) => project.active).length ?? 0);
+  const sidebarWidth = $derived(sidebarCollapsed || viewportWidth <= 980 ? 74 : 210);
+  const logDrawerDock: LogDrawerDock = $derived(
+    viewportWidth - sidebarWidth >= wideDrawerWorkspaceThreshold ? 'right' : 'bottom',
+  );
   const selectedService = $derived.by(() => {
     if (!snapshot || !selectedServiceId) return null;
     return [
@@ -344,11 +353,14 @@
   <title>Dockermon</title>
 </svelte:head>
 
+<svelte:window onresize={() => (viewportWidth = window.innerWidth)} />
+
 <div
   class="app-shell"
-  class:drawer-open={selectedService !== null}
+  class:drawer-bottom={selectedService !== null && logDrawerDock === 'bottom'}
+  class:drawer-right={selectedService !== null && logDrawerDock === 'right'}
   class:sidebar-collapsed={sidebarCollapsed}
-  style={`--log-drawer-width: ${logDrawerWidth}px`}
+  style={`--log-drawer-width: ${logDrawerWidth}px; --log-drawer-height: ${logDrawerHeight}px`}
 >
   <Sidebar {currentView} {locale} onselect={(view) => (currentView = view)} />
   <WindowHeader
@@ -479,13 +491,16 @@
   {#if selectedService}
     {#key selectedService.id}
       <LogDrawer
+        dock={logDrawerDock}
         follow={followLogs}
+        height={logDrawerHeight}
         lines={logLines}
         loading={logsLoading}
         {locale}
         onclear={() => (logLines = [])}
         onclose={closeLogs}
         onfollow={(follow) => (followLogs = follow)}
+        onheightchange={(height) => (logDrawerHeight = height)}
         onwidthchange={(width) => (logDrawerWidth = width)}
         serviceName={selectedService.name}
         {sidebarCollapsed}
