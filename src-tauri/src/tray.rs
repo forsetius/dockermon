@@ -1,0 +1,227 @@
+use crate::{
+    runtime::{ApplicationSnapshot, Locale, RuntimeOperation, ServiceAction, ServiceSnapshot},
+    show_main_window,
+    state::StateCoordinator,
+};
+use tauri::{
+    AppHandle, Emitter, Manager, Runtime,
+    menu::{Menu, MenuItem, PredefinedMenuItem, Submenu},
+    tray::TrayIconBuilder,
+};
+
+const TRAY_ID: &str = "main";
+
+pub fn build_tray<R: Runtime>(
+    app: &AppHandle<R>,
+    snapshot: &ApplicationSnapshot,
+) -> tauri::Result<()> {
+    let menu = create_menu(app, snapshot)?;
+
+    TrayIconBuilder::with_id(TRAY_ID)
+        .icon(
+            app.default_window_icon()
+                .expect("the application icon should be configured")
+                .clone(),
+        )
+        .menu(&menu)
+        .show_menu_on_left_click(true)
+        .on_menu_event(handle_menu_event)
+        .build(app)?;
+
+    Ok(())
+}
+
+pub fn refresh_tray<R: Runtime>(
+    app: &AppHandle<R>,
+    snapshot: &ApplicationSnapshot,
+) -> tauri::Result<()> {
+    if let Some(tray) = app.tray_by_id(TRAY_ID) {
+        tray.set_menu(Some(create_menu(app, snapshot)?))?;
+    }
+    Ok(())
+}
+
+fn create_menu<R: Runtime>(
+    app: &AppHandle<R>,
+    snapshot: &ApplicationSnapshot,
+) -> tauri::Result<Menu<R>> {
+    let menu = Menu::new(app)?;
+    let projects = visible_projects(snapshot);
+
+    for project in projects {
+        let ready_count = project
+            .services
+            .iter()
+            .filter(|service| service.status.is_ready())
+            .count();
+        let project_menu = Submenu::new(
+            app,
+            format!(
+                "{} {}/{}",
+                project.name,
+                ready_count,
+                project.services.len()
+            ),
+            true,
+        )?;
+
+        for service in &project.services {
+            let service_menu = Submenu::new(app, &service.name, true)?;
+            append_service_actions(app, &service_menu, service, snapshot.preferences.language)?;
+            project_menu.append(&service_menu)?;
+        }
+
+        menu.append(&project_menu)?;
+    }
+
+    menu.append(&PredefinedMenuItem::separator(app)?)?;
+    menu.append(&MenuItem::with_id(
+        app,
+        "global-stop",
+        text(
+            snapshot.preferences.language,
+            "Stop all",
+            "Zatrzymaj wszystko",
+        ),
+        !snapshot.global_stop_in_progress,
+        None::<&str>,
+    )?)?;
+    menu.append(&PredefinedMenuItem::separator(app)?)?;
+    menu.append(&MenuItem::with_id(
+        app,
+        "open",
+        text(snapshot.preferences.language, "Open window", "Otwórz okno"),
+        true,
+        None::<&str>,
+    )?)?;
+    menu.append(&MenuItem::with_id(
+        app,
+        "quit",
+        text(snapshot.preferences.language, "Quit", "Zakończ"),
+        true,
+        None::<&str>,
+    )?)?;
+
+    Ok(menu)
+}
+
+fn append_service_actions<R: Runtime>(
+    app: &AppHandle<R>,
+    menu: &Submenu<R>,
+    service: &ServiceSnapshot,
+    language: Locale,
+) -> tauri::Result<()> {
+    if service.status.is_ready() {
+        menu.append(&MenuItem::with_id(
+            app,
+            format!("service|{}|stop", service.id),
+            text(language, "Stop", "Zatrzymaj"),
+            true,
+            None::<&str>,
+        )?)?;
+        menu.append(&MenuItem::with_id(
+            app,
+            format!("service|{}|restart", service.id),
+            text(language, "Restart", "Uruchom ponownie"),
+            true,
+            None::<&str>,
+        )?)?;
+    } else {
+        menu.append(&MenuItem::with_id(
+            app,
+            format!("service|{}|start", service.id),
+            text(language, "Start", "Uruchom"),
+            true,
+            None::<&str>,
+        )?)?;
+    }
+
+    Ok(())
+}
+
+fn visible_projects(snapshot: &ApplicationSnapshot) -> Vec<&crate::runtime::ProjectSnapshot> {
+    if snapshot.projects.iter().any(|project| project.active) {
+        snapshot
+            .projects
+            .iter()
+            .filter(|project| project.active)
+            .collect()
+    } else {
+        snapshot.projects.iter().collect()
+    }
+}
+
+fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, event: tauri::menu::MenuEvent) {
+    match event.id.as_ref() {
+        "open" => show_main_window(app),
+        "quit" => app.exit(0),
+        "global-stop" => apply_tray_operation(app, RuntimeOperation::StopAll),
+        id if id.starts_with("service|") => {
+            let parts: Vec<_> = id.split('|').collect();
+            if let ["service", service_id, action] = parts.as_slice() {
+                let action = match *action {
+                    "start" => Some(ServiceAction::Start),
+                    "stop" => Some(ServiceAction::Stop),
+                    "restart" => Some(ServiceAction::Restart),
+                    _ => None,
+                };
+                if let Some(action) = action {
+                    apply_tray_operation(
+                        app,
+                        RuntimeOperation::RunServiceAction {
+                            action,
+                            service_id: (*service_id).to_owned(),
+                        },
+                    );
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+fn apply_tray_operation<R: Runtime>(app: &AppHandle<R>, operation: RuntimeOperation) {
+    let coordinator = app.state::<StateCoordinator>();
+    if let Ok(snapshot) = coordinator.execute(operation) {
+        let _ = refresh_tray(app, &snapshot);
+        let _ = app.emit("state-changed", snapshot);
+    }
+}
+
+fn text<'a>(language: Locale, english: &'a str, polish: &'a str) -> &'a str {
+    match language {
+        Locale::En => english,
+        Locale::Pl => polish,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::visible_projects;
+    use crate::runtime::RuntimeSupervisor;
+    use crate::runtime::TestRuntimeSupervisor;
+
+    #[test]
+    fn tray_uses_only_active_projects_when_any_are_active() {
+        let supervisor = TestRuntimeSupervisor::new();
+        let snapshot = supervisor.snapshot().expect("fixture snapshot should load");
+
+        let visible: Vec<_> = visible_projects(&snapshot)
+            .into_iter()
+            .map(|project| project.id.as_str())
+            .collect();
+
+        assert_eq!(visible, vec!["storefront", "api-local"]);
+    }
+
+    #[test]
+    fn tray_uses_all_projects_when_none_are_active() {
+        let supervisor = TestRuntimeSupervisor::new();
+        let mut snapshot = supervisor.snapshot().expect("fixture snapshot should load");
+        for project in &mut snapshot.projects {
+            project.active = false;
+        }
+
+        assert_eq!(visible_projects(&snapshot).len(), snapshot.projects.len());
+    }
+}
