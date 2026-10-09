@@ -4,11 +4,10 @@ import type {
   ProjectAction,
   RuntimeCapabilities,
   ServiceAction,
-  ServiceLogSnapshot,
   ThemePreference,
 } from '../domain';
 import { isServiceRunning } from '../domain';
-import type { RuntimeClient, SnapshotListener } from './RuntimeClient';
+import type { RuntimeClient, ServiceLogListener, SnapshotListener } from './RuntimeClient';
 import { createFixtureSnapshot, fixtureLogs } from './fixtures';
 
 export type TestScenario = 'ready' | 'empty' | 'error' | 'loading';
@@ -17,6 +16,7 @@ interface TestRuntimeOptions {
   capabilities?: Partial<RuntimeCapabilities>;
   globalStopFailures?: string[];
   latency?: number;
+  logInterval?: number;
   scenario?: TestScenario;
 }
 
@@ -26,13 +26,21 @@ const delay = (duration: number): Promise<void> =>
 export class TestRuntimeClient implements RuntimeClient {
   private readonly latency: number;
   private readonly listeners = new Set<SnapshotListener>();
+  private readonly logInterval: number;
+  private readonly logSubscriptions = new Map<
+    number,
+    { listener: ServiceLogListener; serviceId: string; timer: number | null }
+  >();
   private readonly scenario: TestScenario;
   private readonly globalStopFailures: ReadonlySet<string>;
   private globalStopSequence = 0;
+  private logSequence = 0;
+  private logSubscriptionSequence = 0;
   private snapshot = createFixtureSnapshot();
 
   constructor(options: TestRuntimeOptions = {}) {
     this.latency = options.latency ?? 180;
+    this.logInterval = options.logInterval ?? 4000;
     this.scenario = options.scenario ?? 'ready';
     this.globalStopFailures = new Set(options.globalStopFailures ?? []);
     this.snapshot.capabilities = {
@@ -57,17 +65,6 @@ export class TestRuntimeClient implements RuntimeClient {
     }
 
     return this.cloneSnapshot();
-  }
-
-  async getServiceLogs(serviceId: string): Promise<ServiceLogSnapshot> {
-    await delay(Math.min(this.latency, 80));
-    return {
-      lines: fixtureLogs[serviceId] ?? [
-        '[12:36:14] [INFO] Container started',
-        '[12:36:15] [INFO] Waiting for application logs...',
-      ],
-      serviceId,
-    };
   }
 
   async importProject(): Promise<ApplicationSnapshot> {
@@ -226,6 +223,51 @@ export class TestRuntimeClient implements RuntimeClient {
   async subscribe(listener: SnapshotListener): Promise<() => void> {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
+  }
+
+  async subscribeServiceLogs(serviceId: string, listener: ServiceLogListener): Promise<() => void> {
+    await delay(Math.min(this.latency, 80));
+    const subscriptionId = `test-logs-${++this.logSubscriptionSequence}`;
+    listener({
+      error: null,
+      lines: fixtureLogs[serviceId] ?? [
+        '[12:36:14] [INFO] Container started',
+        '[12:36:15] [INFO] Waiting for application logs...',
+      ],
+      serviceId,
+      subscriptionId,
+    });
+    const timer =
+      this.logInterval > 0
+        ? window.setInterval(() => {
+            this.emitServiceLogLines(serviceId, [
+              `[live:${++this.logSequence}] [INFO] GET /api/health 200`,
+            ]);
+          }, this.logInterval)
+        : null;
+    const sequence = this.logSubscriptionSequence;
+    this.logSubscriptions.set(sequence, { listener, serviceId, timer });
+    return () => {
+      const subscription = this.logSubscriptions.get(sequence);
+      if (subscription?.timer != null) window.clearInterval(subscription.timer);
+      this.logSubscriptions.delete(sequence);
+    };
+  }
+
+  emitServiceLogLines(serviceId: string, lines: string[]): void {
+    for (const [sequence, subscription] of this.logSubscriptions) {
+      if (subscription.serviceId !== serviceId) continue;
+      subscription.listener({
+        error: null,
+        lines,
+        serviceId,
+        subscriptionId: `test-logs-${sequence}`,
+      });
+    }
+  }
+
+  activeLogSubscriptionCount(): number {
+    return this.logSubscriptions.size;
   }
 
   private allServices() {

@@ -276,7 +276,7 @@ The toggle is a 42px by 24px pill with a 16px white thumb. Its off state is neut
 
 ### Log Drawer
 
-The drawer is the primary inspection surface: a panel header and toolbar above a full-height terminal navy viewport. Logs use pale monospaced text, preserve whitespace, and expose follow, clear, close, Escape, focus restoration, and mobile backdrop behavior.
+The drawer is the primary inspection surface: a panel header and toolbar above a full-height terminal navy viewport. Logs use pale monospaced text, preserve whitespace, and expose follow, clear, close, Escape, focus restoration, and mobile backdrop behavior. Opening the drawer follows the selected service by default; changing services replaces the previous stream, clearing affects only the visible buffer, and an empty stream shows a quiet waiting message. The viewport retains a bounded history so long-running local services do not grow the webview indefinitely.
 
 ### Loading, Empty, Error, and Toast States
 

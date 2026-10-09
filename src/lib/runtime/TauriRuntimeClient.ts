@@ -7,18 +7,15 @@ import type {
   ProjectAction,
   ProjectImportKind,
   ServiceAction,
+  ServiceLogBatch,
   ServiceLogSnapshot,
   ThemePreference,
 } from '../domain';
-import type { RuntimeClient, SnapshotListener } from './RuntimeClient';
+import type { RuntimeClient, ServiceLogListener, SnapshotListener } from './RuntimeClient';
 
 export class TauriRuntimeClient implements RuntimeClient {
   getSnapshot(): Promise<ApplicationSnapshot> {
     return invoke('application_snapshot');
-  }
-
-  getServiceLogs(serviceId: string): Promise<ServiceLogSnapshot> {
-    return invoke('service_logs', { serviceId });
   }
 
   async importProject(kind: ProjectImportKind): Promise<ApplicationSnapshot | null> {
@@ -75,5 +72,44 @@ export class TauriRuntimeClient implements RuntimeClient {
 
   async subscribe(listener: SnapshotListener): Promise<() => void> {
     return listen<ApplicationSnapshot>('state-changed', (event) => listener(event.payload));
+  }
+
+  async subscribeServiceLogs(serviceId: string, listener: ServiceLogListener): Promise<() => void> {
+    const subscriptionId = crypto.randomUUID();
+    const pendingBatches: ServiceLogBatch[] = [];
+    let initialized = false;
+    let active = true;
+    const stopListening = await listen<ServiceLogBatch>('service-log-batch', (event) => {
+      const batch = event.payload;
+      if (!active || batch.subscriptionId !== subscriptionId) return;
+      if (initialized) listener(batch);
+      else pendingBatches.push(batch);
+    });
+
+    try {
+      const initial = await invoke<ServiceLogSnapshot>('start_service_logs', {
+        serviceId,
+        subscriptionId,
+      });
+      listener({
+        error: null,
+        lines: initial.lines,
+        serviceId: initial.serviceId,
+        subscriptionId,
+      });
+      initialized = true;
+      for (const batch of pendingBatches) listener(batch);
+    } catch (error) {
+      active = false;
+      stopListening();
+      throw error;
+    }
+
+    return () => {
+      if (!active) return;
+      active = false;
+      stopListening();
+      void invoke('stop_service_logs', { subscriptionId });
+    };
   }
 }

@@ -55,7 +55,11 @@
   type="button"
 ></button>
 
-<aside aria-label={translate(locale, 'drawer.title', { service: serviceName })} class="log-drawer">
+<aside
+  aria-busy={loading}
+  aria-label={translate(locale, 'drawer.title', { service: serviceName })}
+  class="log-drawer"
+>
   <header class="drawer-header">
     <span aria-hidden="true" class="drawer-grip"></span>
     <h2>{translate(locale, 'drawer.title', { service: serviceName })}</h2>
@@ -75,7 +79,12 @@
       <Toggle checked={follow} label={translate(locale, 'drawer.follow')} onchange={onfollow} />
       <span>{translate(locale, 'drawer.follow')}</span>
     </label>
-    <button class="text-button" onclick={onclear} type="button">
+    <button
+      class="text-button"
+      disabled={loading || lines.length === 0}
+      onclick={onclear}
+      type="button"
+    >
       <Icon name="trash" size={18} />
       {translate(locale, 'action.clear')}
     </button>
@@ -95,7 +104,8 @@
       aria-live="polite"
       class="log-viewport"
       bind:this={logViewport}
+      placeholder={translate(locale, 'drawer.empty')}
       readonly
-      value={`${lines.join('\n')}\n`}></textarea>
+      value={lines.join('\n')}></textarea>
   {/if}
 </aside>

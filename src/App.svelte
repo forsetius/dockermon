@@ -7,6 +7,7 @@
     ProjectAction,
     ProjectImportKind,
     ServiceAction,
+    ServiceLogBatch,
     ServiceSnapshot,
     ThemePreference,
   } from './lib/domain';
@@ -42,6 +43,10 @@
     null,
   );
   let lastGlobalStopReportSequence = 0;
+  let logRequestSequence = 0;
+  let stopLogSubscription: (() => void) | undefined;
+
+  const logLineLimit = 2000;
 
   const fallbackLocale: Locale = navigator.language.toLowerCase().startsWith('pl') ? 'pl' : 'en';
   const locale = $derived(snapshot?.preferences.language ?? fallbackLocale);
@@ -70,18 +75,9 @@
         unsubscribe = stopSubscription;
       });
 
-    const liveLogTimer = window.setInterval(() => {
-      if (!selectedService || !followLogs || logsLoading) return;
-      const timestamp = new Intl.DateTimeFormat('en-GB', {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-      }).format(new Date());
-      logLines = [...logLines.slice(-198), `[${timestamp}] [INFO] GET /api/health 200`];
-    }, 4000);
-
     return () => {
-      window.clearInterval(liveLogTimer);
+      logRequestSequence += 1;
+      stopActiveLogSubscription();
       unsubscribe?.();
     };
   });
@@ -202,22 +198,34 @@
   }
 
   async function openLogs(service: ServiceSnapshot): Promise<void> {
+    const requestSequence = ++logRequestSequence;
+    stopActiveLogSubscription();
     selectedServiceId = service.id;
     logsLoading = true;
+    followLogs = true;
     logLines = [];
     try {
-      const result = await runtimeClient.getServiceLogs(service.id);
-      if (selectedServiceId === result.serviceId) logLines = result.lines;
-    } catch {
-      showError();
+      const stopSubscription = await runtimeClient.subscribeServiceLogs(service.id, (batch) =>
+        receiveLogBatch(service.id, requestSequence, batch),
+      );
+      if (requestSequence !== logRequestSequence || selectedServiceId !== service.id) {
+        stopSubscription();
+        return;
+      }
+      stopLogSubscription = stopSubscription;
+    } catch (error) {
+      if (requestSequence === logRequestSequence) showError(error);
     } finally {
-      logsLoading = false;
+      if (requestSequence === logRequestSequence) logsLoading = false;
     }
   }
 
   function closeLogs(): void {
+    logRequestSequence += 1;
+    stopActiveLogSubscription();
     selectedServiceId = null;
     logLines = [];
+    logsLoading = false;
   }
 
   async function changeTheme(theme: ThemePreference): Promise<void> {
@@ -263,9 +271,13 @@
       DOCKER_PERMISSION_DENIED: 'error.dockerPermissionDenied',
       DOCKER_UNAVAILABLE: 'error.dockerUnavailable',
       GLOBAL_STOP_IN_PROGRESS: 'error.globalStopInProgress',
+      LOGS_READ_FAILED: 'error.logsReadFailed',
+      LOG_STREAM_FAILED: 'error.logStreamFailed',
       NO_SERVICES_SELECTED: 'error.noServicesSelected',
       PROJECT_SOURCE_UNAVAILABLE: 'error.projectSourceUnavailable',
       PROJECT_OPERATION_IN_PROGRESS: 'error.projectOperationInProgress',
+      SERVICE_HAS_NO_CONTAINERS: 'error.serviceHasNoContainers',
+      SERVICE_NOT_FOUND: 'error.serviceNotFound',
     };
     toast = {
       message: translate(locale, (code && errorKeys[code]) || 'operation.failed'),
@@ -283,6 +295,28 @@
     busyStandaloneServiceIds = busy
       ? [...busyStandaloneServiceIds.filter((candidate) => candidate !== serviceId), serviceId]
       : busyStandaloneServiceIds.filter((candidate) => candidate !== serviceId);
+  }
+
+  function receiveLogBatch(
+    serviceId: string,
+    requestSequence: number,
+    batch: ServiceLogBatch,
+  ): void {
+    if (
+      requestSequence !== logRequestSequence ||
+      selectedServiceId !== serviceId ||
+      batch.serviceId !== serviceId
+    )
+      return;
+    if (batch.error) showError(batch.error);
+    if (batch.lines.length > 0) {
+      logLines = [...logLines, ...batch.lines].slice(-logLineLimit);
+    }
+  }
+
+  function stopActiveLogSubscription(): void {
+    stopLogSubscription?.();
+    stopLogSubscription = undefined;
   }
 
   function receiveSnapshot(nextSnapshot: ApplicationSnapshot): void {
@@ -431,16 +465,18 @@
   </main>
 
   {#if selectedService}
-    <LogDrawer
-      follow={followLogs}
-      lines={logLines}
-      loading={logsLoading}
-      {locale}
-      onclear={() => (logLines = [])}
-      onclose={closeLogs}
-      onfollow={(follow) => (followLogs = follow)}
-      serviceName={selectedService.name}
-    />
+    {#key selectedService.id}
+      <LogDrawer
+        follow={followLogs}
+        lines={logLines}
+        loading={logsLoading}
+        {locale}
+        onclear={() => (logLines = [])}
+        onclose={closeLogs}
+        onfollow={(follow) => (followLogs = follow)}
+        serviceName={selectedService.name}
+      />
+    {/key}
   {/if}
 
   {#if toast}

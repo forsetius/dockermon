@@ -86,8 +86,6 @@ environment variables and other Compose secrets are neither stored nor sent to t
 - Ports and resource usage are aggregated across every container belonging to a Compose service.
 - Missing access to the Docker socket and Engine disconnections are shown in the interface without
   terminating the application. Reconnection uses a bounded backoff.
-- Logs remain disabled in the production runtime until stage 5. The deterministic browser runtime
-  continues to expose them for interface testing.
 
 ## Stage 3 acceptance
 
@@ -120,3 +118,14 @@ json` while retaining only safe catalog metadata.
   containers, networks, or volumes and never runs `docker compose down`.
 - Global stopping uses bounded concurrency, blocks other lifecycle actions, shows progress, and
   reports both the stopped count and individual container failures.
+
+## Stage 5 acceptance
+
+- Opening the log drawer loads the latest 200 lines and follows new output from every container
+  belonging to the selected Compose service or from the selected standalone container.
+- Multi-container services merge their streams and prefix each line with the originating container
+  name. Terminal control sequences are removed before log text reaches the interface.
+- Log output is sent to the frontend in bounded batches, while the interface retains at most 2,000
+  lines and follows the end of the stream by default.
+- Clearing the drawer affects only the visible buffer. Closing it, changing services, or leaving the
+  application cancels the previous Docker log subscription.

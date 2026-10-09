@@ -1,7 +1,7 @@
 use crate::docker_runtime::DockerRuntimeSupervisor;
 use crate::runtime::{
-    ApplicationSnapshot, RuntimeError, RuntimeOperation, RuntimeSupervisor, ServiceLogSnapshot,
-    SnapshotPublisher, VisibilityProbe,
+    ApplicationSnapshot, LogPublisher, RuntimeError, RuntimeOperation, RuntimeSupervisor,
+    ServiceLogSnapshot, SnapshotPublisher, VisibilityProbe,
 };
 use std::sync::Arc;
 
@@ -24,8 +24,19 @@ impl StateCoordinator {
         self.runtime.execute(operation).await
     }
 
-    pub async fn logs(&self, service_id: &str) -> Result<ServiceLogSnapshot, RuntimeError> {
-        self.runtime.logs(service_id).await
+    pub async fn start_logs(
+        &self,
+        service_id: &str,
+        subscription_id: &str,
+        publish: LogPublisher,
+    ) -> Result<ServiceLogSnapshot, RuntimeError> {
+        self.runtime
+            .start_logs(service_id, subscription_id, publish)
+            .await
+    }
+
+    pub async fn stop_logs(&self, subscription_id: &str) {
+        self.runtime.stop_logs(subscription_id).await;
     }
 
     pub async fn snapshot(&self) -> Result<ApplicationSnapshot, RuntimeError> {

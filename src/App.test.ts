@@ -139,7 +139,8 @@ describe('App', () => {
   });
 
   it('opens, populates, and closes the log drawer from the keyboard', async () => {
-    renderApplication();
+    const runtimeClient = new TestRuntimeClient({ latency: 0, logInterval: 0 });
+    render(App, { runtimeClient });
     const project = await screen.findByTestId('project-api-local');
 
     const logTrigger = within(project).getByRole('button', { name: 'Show logs for api' });
@@ -157,6 +158,57 @@ describe('App', () => {
     await fireEvent.keyDown(window, { key: 'Escape' });
     expect(screen.queryByRole('complementary', { name: 'Logs · api' })).not.toBeInTheDocument();
     expect(logTrigger).toHaveFocus();
+    expect(runtimeClient.activeLogSubscriptionCount()).toBe(0);
+  });
+
+  it('streams into a bounded buffer and clearing affects only the current view', async () => {
+    const runtimeClient = new TestRuntimeClient({ latency: 0, logInterval: 0 });
+    render(App, { runtimeClient });
+    const project = await screen.findByTestId('project-api-local');
+
+    await fireEvent.click(within(project).getByRole('button', { name: 'Show logs for api' }));
+    const drawer = await screen.findByRole('complementary', { name: 'Logs · api' });
+    const logOutput = await within(drawer).findByRole<HTMLTextAreaElement>('textbox', {
+      name: 'Logs · api',
+    });
+    runtimeClient.emitServiceLogLines('api-local-api', ['live-before-clear']);
+    await waitFor(() => expect(logOutput.value).toContain('live-before-clear'));
+
+    await fireEvent.click(within(drawer).getByRole('button', { name: 'Clear view' }));
+    expect(logOutput.value).toBe('');
+    runtimeClient.emitServiceLogLines('api-local-api', ['live-after-clear']);
+    await waitFor(() => expect(logOutput.value).toBe('live-after-clear'));
+
+    runtimeClient.emitServiceLogLines(
+      'api-local-api',
+      Array.from({ length: 2005 }, (_, index) => `bounded-${index.toString().padStart(4, '0')}`),
+    );
+    await waitFor(() => {
+      expect(logOutput.value).not.toContain('bounded-0000');
+      expect(logOutput.value).toContain('bounded-2004');
+    });
+  });
+
+  it('cancels the previous log stream when switching services', async () => {
+    const runtimeClient = new TestRuntimeClient({ latency: 0, logInterval: 0 });
+    render(App, { runtimeClient });
+    const project = await screen.findByTestId('project-api-local');
+
+    await fireEvent.click(within(project).getByRole('button', { name: 'Show logs for api' }));
+    await screen.findByRole('complementary', { name: 'Logs · api' });
+    await waitFor(() => expect(runtimeClient.activeLogSubscriptionCount()).toBe(1));
+
+    await fireEvent.click(within(project).getByRole('button', { name: 'Show logs for web' }));
+    const drawer = await screen.findByRole('complementary', { name: 'Logs · web' });
+    const logOutput = await within(drawer).findByRole<HTMLTextAreaElement>('textbox', {
+      name: 'Logs · web',
+    });
+    await waitFor(() => expect(runtimeClient.activeLogSubscriptionCount()).toBe(1));
+
+    runtimeClient.emitServiceLogLines('api-local-api', ['old-service-line']);
+    runtimeClient.emitServiceLogLines('api-local-web', ['current-service-line']);
+    await waitFor(() => expect(logOutput.value).toContain('current-service-line'));
+    expect(logOutput.value).not.toContain('old-service-line');
   });
 
   it('shows deterministic empty and error states', async () => {

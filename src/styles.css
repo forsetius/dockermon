@@ -1222,6 +1222,11 @@ input:disabled {
   white-space: pre;
 }
 
+.log-viewport::placeholder {
+  color: color-mix(in srgb, var(--terminal-text) 56%, transparent);
+  opacity: 1;
+}
+
 .log-skeleton {
   display: grid;
   gap: 9px;
