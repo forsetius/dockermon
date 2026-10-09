@@ -14,6 +14,8 @@
   let {
     busyProjectId = null,
     busyServiceId = null,
+    lifecycleActionsEnabled,
+    logsEnabled,
     locale,
     onactive,
     onbulk,
@@ -25,6 +27,8 @@
   }: {
     busyProjectId?: string | null;
     busyServiceId?: string | null;
+    lifecycleActionsEnabled: boolean;
+    logsEnabled: boolean;
     locale: Locale;
     onactive: (active: boolean) => void;
     onbulk: (service: ServiceSnapshot, selected: boolean) => void;
@@ -79,7 +83,7 @@
       </label>
       <button
         class="primary-button"
-        disabled={selectedCount === 0 || busyProjectId === project.id}
+        disabled={!lifecycleActionsEnabled || selectedCount === 0 || busyProjectId === project.id}
         onclick={() => onprojectaction('start-selected')}
         type="button"
       >
@@ -88,7 +92,7 @@
       </button>
       <button
         class="danger-button"
-        disabled={selectedCount === 0 || busyProjectId === project.id}
+        disabled={!lifecycleActionsEnabled || selectedCount === 0 || busyProjectId === project.id}
         onclick={() => onprojectaction('stop-selected')}
         type="button"
       >
@@ -111,8 +115,10 @@
         />
       </div>
       <ServiceTable
+        actionsEnabled={lifecycleActionsEnabled}
         {busyServiceId}
         {locale}
+        {logsEnabled}
         onaction={onserviceaction}
         {onbulk}
         {onlogs}

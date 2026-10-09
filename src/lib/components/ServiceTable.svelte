@@ -5,8 +5,10 @@
   import Icon from './Icon.svelte';
 
   let {
+    actionsEnabled = true,
     busyServiceId = null,
     locale,
+    logsEnabled = true,
     onaction,
     onbulk,
     onlogs,
@@ -14,8 +16,10 @@
     services,
     showBulk = true,
   }: {
+    actionsEnabled?: boolean;
     busyServiceId?: string | null;
     locale: Locale;
+    logsEnabled?: boolean;
     onaction: (service: ServiceSnapshot, action: ServiceAction) => void;
     onbulk?: (service: ServiceSnapshot, selected: boolean) => void;
     onlogs: (service: ServiceSnapshot) => void;
@@ -57,9 +61,13 @@
     {#if showBulk}<span aria-hidden="true" class="bulk-cell"></span>{/if}
     <span role="columnheader">{translate(locale, 'service.name')}</span>
     <span role="columnheader">{translate(locale, 'service.status')}</span>
-    <span class="metric-heading" role="columnheader">{translate(locale, 'service.cpu')}</span>
-    <span class="metric-heading" role="columnheader">{translate(locale, 'service.memory')}</span>
-    <span role="columnheader">{translate(locale, 'service.ports')}</span>
+    <span class="metric-heading resource-cpu" role="columnheader"
+      >{translate(locale, 'service.cpu')}</span
+    >
+    <span class="metric-heading resource-memory" role="columnheader"
+      >{translate(locale, 'service.memory')}</span
+    >
+    <span class="ports-column" role="columnheader">{translate(locale, 'service.ports')}</span>
     <span role="columnheader">{translate(locale, 'service.actions')}</span>
   </div>
 
@@ -89,20 +97,22 @@
         <span aria-hidden="true" class="status-dot {service.status}"></span>
         <span>{translate(locale, statusKeys[service.status])}</span>
       </span>
-      <span class="metric" data-label={translate(locale, 'service.cpu')} role="cell"
+      <span class="metric resource-cpu" data-label={translate(locale, 'service.cpu')} role="cell"
         >{formatCpu(service.cpuPercent)}</span
       >
-      <span class="metric" data-label={translate(locale, 'service.memory')} role="cell"
-        >{formatMemory(service.memoryBytes)}</span
+      <span
+        class="metric resource-memory"
+        data-label={translate(locale, 'service.memory')}
+        role="cell">{formatMemory(service.memoryBytes)}</span
       >
-      <span class="ports" data-label={translate(locale, 'service.ports')} role="cell">
+      <span class="ports ports-column" data-label={translate(locale, 'service.ports')} role="cell">
         {service.ports.length > 0 ? service.ports.join(', ') : '—'}
       </span>
       <span class="row-actions" role="cell">
         <button
           aria-label={translate(locale, 'action.start', { service: service.name })}
           class="icon-button"
-          disabled={!canStart(service.status) || busyServiceId !== null}
+          disabled={!actionsEnabled || !canStart(service.status) || busyServiceId !== null}
           onclick={() => onaction(service, 'start')}
           title={translate(locale, 'action.start', { service: service.name })}
           type="button"
@@ -112,7 +122,7 @@
         <button
           aria-label={translate(locale, 'action.stop', { service: service.name })}
           class="icon-button"
-          disabled={!canStop(service.status) || busyServiceId !== null}
+          disabled={!actionsEnabled || !canStop(service.status) || busyServiceId !== null}
           onclick={() => onaction(service, 'stop')}
           title={translate(locale, 'action.stop', { service: service.name })}
           type="button"
@@ -122,7 +132,7 @@
         <button
           aria-label={translate(locale, 'action.restart', { service: service.name })}
           class="icon-button"
-          disabled={!canRestart(service.status) || busyServiceId !== null}
+          disabled={!actionsEnabled || !canRestart(service.status) || busyServiceId !== null}
           onclick={() => onaction(service, 'restart')}
           title={translate(locale, 'action.restart', { service: service.name })}
           type="button"
@@ -132,6 +142,7 @@
         <button
           aria-label={translate(locale, 'action.logs', { service: service.name })}
           class="icon-button"
+          disabled={!logsEnabled}
           onclick={() => onlogs(service)}
           title={translate(locale, 'action.logs', { service: service.name })}
           type="button"

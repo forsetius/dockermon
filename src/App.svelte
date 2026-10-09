@@ -221,7 +221,9 @@
                 <ProjectPanel
                   {busyProjectId}
                   {busyServiceId}
+                  lifecycleActionsEnabled={snapshot.capabilities.lifecycleActions}
                   {locale}
+                  logsEnabled={snapshot.capabilities.logs}
                   onactive={(active) => updateProjectActive(project.id, active)}
                   onbulk={(service, selected) => updateBulkSelection(project.id, service, selected)}
                   onlogs={openLogs}
@@ -245,8 +247,10 @@
           {:else}
             <div class="standalone-panel">
               <ServiceTable
+                actionsEnabled={snapshot.capabilities.lifecycleActions}
                 {busyServiceId}
                 {locale}
+                logsEnabled={snapshot.capabilities.logs}
                 onaction={runServiceAction}
                 onlogs={openLogs}
                 {selectedServiceId}

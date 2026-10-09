@@ -20,6 +20,10 @@ export function createFixtureSnapshot(): ApplicationSnapshot {
         successful: true,
       },
     ],
+    capabilities: {
+      lifecycleActions: true,
+      logs: true,
+    },
     connection: 'connected',
     globalStopInProgress: false,
     preferences: {

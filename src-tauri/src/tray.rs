@@ -67,7 +67,13 @@ fn create_menu<R: Runtime>(
 
         for service in &project.services {
             let service_menu = Submenu::new(app, &service.name, true)?;
-            append_service_actions(app, &service_menu, service, snapshot.preferences.language)?;
+            append_service_actions(
+                app,
+                &service_menu,
+                service,
+                snapshot.preferences.language,
+                snapshot.capabilities.lifecycle_actions,
+            )?;
             project_menu.append(&service_menu)?;
         }
 
@@ -83,7 +89,7 @@ fn create_menu<R: Runtime>(
             "Stop all",
             "Zatrzymaj wszystko",
         ),
-        !snapshot.global_stop_in_progress,
+        snapshot.capabilities.lifecycle_actions && !snapshot.global_stop_in_progress,
         None::<&str>,
     )?)?;
     menu.append(&PredefinedMenuItem::separator(app)?)?;
@@ -110,20 +116,21 @@ fn append_service_actions<R: Runtime>(
     menu: &Submenu<R>,
     service: &ServiceSnapshot,
     language: Locale,
+    enabled: bool,
 ) -> tauri::Result<()> {
     if service.status.is_ready() {
         menu.append(&MenuItem::with_id(
             app,
             format!("service|{}|stop", service.id),
             text(language, "Stop", "Zatrzymaj"),
-            true,
+            enabled,
             None::<&str>,
         )?)?;
         menu.append(&MenuItem::with_id(
             app,
             format!("service|{}|restart", service.id),
             text(language, "Restart", "Uruchom ponownie"),
-            true,
+            enabled,
             None::<&str>,
         )?)?;
     } else {
@@ -131,7 +138,7 @@ fn append_service_actions<R: Runtime>(
             app,
             format!("service|{}|start", service.id),
             text(language, "Start", "Uruchom"),
-            true,
+            enabled,
             None::<&str>,
         )?)?;
     }
@@ -181,11 +188,14 @@ fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, event: tauri::menu::MenuEve
 }
 
 fn apply_tray_operation<R: Runtime>(app: &AppHandle<R>, operation: RuntimeOperation) {
-    let coordinator = app.state::<StateCoordinator>();
-    if let Ok(snapshot) = coordinator.execute(operation) {
-        let _ = refresh_tray(app, &snapshot);
-        let _ = app.emit("state-changed", snapshot);
-    }
+    let coordinator = app.state::<StateCoordinator>().inner().clone();
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        if let Ok(snapshot) = coordinator.execute(operation).await {
+            let _ = refresh_tray(&app, &snapshot);
+            let _ = app.emit("state-changed", snapshot);
+        }
+    });
 }
 
 fn text<'a>(language: Locale, english: &'a str, polish: &'a str) -> &'a str {
@@ -204,7 +214,7 @@ mod tests {
     #[test]
     fn tray_uses_only_active_projects_when_any_are_active() {
         let supervisor = TestRuntimeSupervisor::new();
-        let snapshot = supervisor.snapshot().expect("fixture snapshot should load");
+        let snapshot = run(supervisor.snapshot()).expect("fixture snapshot should load");
 
         let visible: Vec<_> = visible_projects(&snapshot)
             .into_iter()
@@ -217,11 +227,19 @@ mod tests {
     #[test]
     fn tray_uses_all_projects_when_none_are_active() {
         let supervisor = TestRuntimeSupervisor::new();
-        let mut snapshot = supervisor.snapshot().expect("fixture snapshot should load");
+        let mut snapshot = run(supervisor.snapshot()).expect("fixture snapshot should load");
         for project in &mut snapshot.projects {
             project.active = false;
         }
 
         assert_eq!(visible_projects(&snapshot).len(), snapshot.projects.len());
+    }
+
+    fn run<F: std::future::Future>(future: F) -> F::Output {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("test runtime should build")
+            .block_on(future)
     }
 }

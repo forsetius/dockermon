@@ -195,13 +195,13 @@ Dark mode keeps these semantic roles and overrides their values as follows: acce
 
 ## Layout
 
-The desktop shell is a fixed viewport grid with a left sidebar (210px), a top window header (62px), and a scrollable content region. Main project content is centered up to 1120px and uses 24px outer padding. Project panels stack with 18px gaps; rows remain compact at 40–44px high so several services stay visible at once.
+The desktop shell is a fixed viewport grid with a left sidebar (210px), a top window header (62px), and a scrollable content region. The main project view uses the full available content width with 24px outer padding so operational columns benefit from large desktop windows; secondary and settings views remain constrained to 960px for comfortable reading. Project panels stack with 18px gaps; rows remain compact at 40–44px high so several services stay visible at once.
 
-Below 980px, the sidebar collapses to a 74px icon rail. Below 700px, it becomes a fixed 64px bottom navigation bar, the top header becomes 56px, and the content padding becomes 18px 14px 88px. Service tables turn into two-column labeled cards while service names and action rows span the full width. Project actions form a two-column grid, with the active-project toggle on its own row.
+Below 980px, the sidebar collapses to a 74px icon rail. As the table loses horizontal space, observability columns disappear in a fixed priority order: ports first, then memory, then CPU. The rule responds to both window width and the table's actual container width, including space lost to the log drawer. Below 700px, the sidebar becomes a fixed 64px bottom navigation bar, the top header becomes 56px, and the content padding becomes 18px 14px 88px. Service rows become compact cards that retain the bulk checkbox, service name, state, and actions. Project actions form a two-column grid, with the active-project toggle on its own row.
 
 The log drawer is 430px wide on desktop and uses the full viewport width on mobile. At 1280px and above, the underlying workspace yields 430px to the open drawer instead of being obscured. Narrow screens use a backdrop and treat the drawer as a modal layer.
 
-**The Scan Before Action Rule.** Keep names, state, CPU, memory, ports, and row actions in a consistent reading order; responsive layouts may reflow them but must not drop them.
+**The Scan Before Action Rule.** Keep names, state, CPU, memory, ports, and row actions in a consistent reading order. When horizontal space is insufficient, hide ports, then memory, then CPU; never hide the service name, state, or actions.
 
 ## Elevation & Depth
 
@@ -288,7 +288,7 @@ Loading uses panel-shaped skeletons with a restrained 1.3s sweep. Empty and erro
 
 - **Don't** use green, amber, or red for decoration or navigation emphasis.
 - **Don't** add resting card shadows, gradients, glass effects, or oversized floating surfaces to the workspace.
-- **Don't** hide metrics or service actions when adapting the table for mobile.
+- **Don't** hide service names, states, or actions when adapting the table, and never hide observability columns out of the ports → memory → CPU priority order.
 - **Don't** turn every control into a pill; reserve fully rounded shapes for switches, dots, and scrollbar thumbs.
 - **Don't** expand the type palette beyond system sans and functional monospace without replacing the visual system deliberately.
 - **Don't** imitate Docker Desktop's visual identity; Dockermon should remain a quiet Linux-native utility.
