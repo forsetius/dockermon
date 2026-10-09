@@ -201,6 +201,8 @@ Below 980px, the sidebar collapses to a 74px icon rail. As the table loses horiz
 
 The log drawer is 430px wide on desktop and uses the full viewport width on mobile. At 1280px and above, the underlying workspace yields 430px to the open drawer instead of being obscured. Narrow screens use a backdrop and treat the drawer as a modal layer.
 
+The native tray keeps one submenu per visible project and exactly one item per service. Each item is labeled with the service name and uses its icon and click behavior for the single recommended action in the current state: start when absent, stopped, or failed; stop while starting, running, or healthy; restart when unhealthy; and resume when paused. When lifecycle operations are unavailable globally, service items remain visible but disabled.
+
 **The Scan Before Action Rule.** Keep names, state, CPU, memory, ports, and row actions in a consistent reading order. When horizontal space is insufficient, hide ports, then memory, then CPU; never hide the service name, state, or actions.
 
 ## Elevation & Depth

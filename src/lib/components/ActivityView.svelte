@@ -7,11 +7,17 @@
 
   const actionKeys: Record<string, TranslationKey> = {
     restart: 'activity.restart',
+    resume: 'activity.resume',
     start: 'activity.start',
     'start-selected': 'activity.start-selected',
     stop: 'activity.stop',
     'stop-all': 'activity.stop-all',
     'stop-selected': 'activity.stop-selected',
+  };
+
+  const actionIcon = (action: string): 'play' | 'restart' | 'stop' => {
+    if (action.includes('stop')) return 'stop';
+    return action === 'restart' ? 'restart' : 'play';
   };
 </script>
 
@@ -27,7 +33,7 @@
       {#each activity as entry (entry.id)}
         <li>
           <span aria-hidden="true" class:failed={!entry.successful} class="activity-icon">
-            <Icon name={entry.action.includes('stop') ? 'stop' : 'restart'} size={17} />
+            <Icon name={actionIcon(entry.action)} size={17} />
           </span>
           <div>
             <strong>{entry.subject}</strong>

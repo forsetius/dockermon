@@ -135,9 +135,13 @@
     busyServiceId = service.id;
     try {
       snapshot = await runtimeClient.runServiceAction(service.id, action);
-      const actionKey: TranslationKey =
-        action === 'start' ? 'action.start' : action === 'stop' ? 'action.stop' : 'action.restart';
-      showSuccess(service.name, translate(locale, actionKey, { service: service.name }));
+      const actionKeys: Record<ServiceAction, TranslationKey> = {
+        restart: 'action.restart',
+        resume: 'action.resume',
+        start: 'action.start',
+        stop: 'action.stop',
+      };
+      showSuccess(service.name, translate(locale, actionKeys[action], { service: service.name }));
     } catch {
       showError();
     } finally {

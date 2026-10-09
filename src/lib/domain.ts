@@ -7,7 +7,7 @@ export type ConnectionStatus = 'connected' | 'connecting' | 'disconnected' | 'pe
 export type ServiceStatus =
   'not-created' | 'stopped' | 'starting' | 'running' | 'healthy' | 'unhealthy' | 'paused' | 'error';
 
-export type ServiceAction = 'start' | 'stop' | 'restart';
+export type ServiceAction = 'start' | 'stop' | 'restart' | 'resume';
 
 export type ProjectAction = 'start-selected' | 'stop-selected';
 

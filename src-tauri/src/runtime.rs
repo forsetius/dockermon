@@ -79,12 +79,13 @@ impl ServiceStatus {
     }
 }
 
-#[derive(Clone, Copy, Debug, Deserialize)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum ServiceAction {
     Start,
     Stop,
     Restart,
+    Resume,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize)]
@@ -341,6 +342,7 @@ impl RuntimeSupervisor for TestRuntimeSupervisor {
                             ServiceAction::Start => "start",
                             ServiceAction::Stop => "stop",
                             ServiceAction::Restart => "restart",
+                            ServiceAction::Resume => "resume",
                         }
                         .to_owned(),
                         service.name.clone(),
@@ -440,7 +442,7 @@ fn set_service_state(service: &mut ServiceSnapshot, action: ServiceAction) {
             service.cpu_percent = None;
             service.memory_bytes = None;
         }
-        ServiceAction::Start | ServiceAction::Restart => {
+        ServiceAction::Start | ServiceAction::Restart | ServiceAction::Resume => {
             service.status = ServiceStatus::Running;
             service.cpu_percent = Some(service.cpu_percent.unwrap_or(0.1).max(0.1));
             service.memory_bytes = Some(service.memory_bytes.unwrap_or(32 * MEGABYTE));
@@ -701,6 +703,23 @@ mod tests {
                 .chain(&snapshot.standalone_containers)
                 .all(|service| !service.status.can_stop())
         );
+    }
+
+    #[test]
+    fn resume_changes_a_paused_service_to_running() {
+        let mut paused_service = service(
+            "paused-worker",
+            "worker",
+            ServiceStatus::Paused,
+            false,
+            Some(0.0),
+            Some(32),
+            &[],
+        );
+
+        set_service_state(&mut paused_service, ServiceAction::Resume);
+
+        assert_eq!(paused_service.status, ServiceStatus::Running);
     }
 
     fn run<F: std::future::Future>(future: F) -> F::Output {
