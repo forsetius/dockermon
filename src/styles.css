@@ -382,6 +382,37 @@ input:disabled {
   line-height: 1.55;
 }
 
+.projects-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.projects-heading > div:first-child {
+  display: grid;
+  gap: 7px;
+}
+
+.import-actions {
+  display: flex;
+  flex: none;
+  gap: 8px;
+}
+
+.import-actions .text-button {
+  padding: 0 13px;
+  border: 1px solid var(--border-strong);
+  color: var(--muted);
+  background: var(--panel);
+}
+
+.import-actions .text-button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent-text);
+  background: var(--accent-soft);
+}
+
 .title-line {
   display: flex;
   align-items: center;
@@ -419,6 +450,13 @@ input:disabled {
   gap: 16px;
   padding: 8px 10px 8px 14px;
   border-bottom: 1px solid var(--border);
+}
+
+.project-identity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
 }
 
 .disclosure {
@@ -468,6 +506,46 @@ input:disabled {
   gap: 8px;
 }
 
+.profile-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.profile-control {
+  position: relative;
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--muted);
+  background: var(--app-background);
+  font-size: 0.75rem;
+  font-weight: 620;
+}
+
+.profile-control.enabled {
+  border-color: color-mix(in srgb, var(--accent) 52%, var(--border));
+  color: var(--accent-text);
+  background: var(--accent-soft);
+}
+
+.profile-control input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.profile-control:has(input:focus-visible) {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
 .active-control {
   width: 124px;
   flex: none;
@@ -479,7 +557,8 @@ input:disabled {
 
 .primary-button,
 .danger-button,
-.text-button {
+.text-button,
+.project-remove-button {
   display: inline-flex;
   min-height: 36px;
   align-items: center;
@@ -512,6 +591,19 @@ input:disabled {
 
 .danger-button:hover:not(:disabled) {
   border-color: var(--danger);
+}
+
+.project-remove-button {
+  margin-left: 3px;
+  border: 1px solid var(--border-strong);
+  color: var(--muted);
+  background: transparent;
+}
+
+.project-remove-button:hover:not(:disabled) {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: var(--danger-soft);
 }
 
 .project-table-wrap {
@@ -587,6 +679,16 @@ input:disabled {
   background: var(--panel-selected);
 }
 
+.service-data-row.excluded {
+  background: color-mix(in srgb, var(--panel) 88%, var(--app-background));
+}
+
+.service-data-row.excluded .service-name,
+.service-data-row.excluded .metric,
+.service-data-row.excluded .ports {
+  color: var(--muted-soft);
+}
+
 .selection-checkbox {
   display: grid;
   appearance: none;
@@ -647,6 +749,19 @@ input:disabled {
   overflow: hidden;
   font-weight: 630;
   text-overflow: ellipsis;
+}
+
+.service-profile {
+  overflow: hidden;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--muted);
+  background: var(--app-background);
+  font-size: 0.75rem;
+  font-weight: 620;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .service-status {
@@ -1209,6 +1324,26 @@ input:disabled {
     padding: 10px 14px 12px;
   }
 
+  .projects-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .import-actions {
+    align-self: flex-start;
+  }
+
+  .project-identity {
+    width: 100%;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .profile-controls {
+    padding-left: 42px;
+  }
+
   .project-controls {
     width: 100%;
     justify-content: flex-end;
@@ -1293,9 +1428,27 @@ input:disabled {
     grid-template-columns: 1fr 1fr;
   }
 
+  .import-actions {
+    display: grid;
+    width: 100%;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .import-actions button {
+    min-width: 0;
+    padding: 0 9px;
+    font-size: 0.75rem;
+  }
+
   .active-control {
     grid-column: 1 / -1;
     justify-self: start;
+  }
+
+  .project-remove-button {
+    grid-column: 1 / -1;
+    justify-self: end;
+    margin-left: 0;
   }
 
   .active-control > span {

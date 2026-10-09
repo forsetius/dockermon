@@ -66,12 +66,57 @@ export class TestRuntimeClient implements RuntimeClient {
     };
   }
 
+  async importProject(): Promise<ApplicationSnapshot> {
+    await delay(this.latency);
+    if (!this.snapshot.projects.some((project) => project.id === 'compose:zerniki')) {
+      this.snapshot.projects.push({
+        active: false,
+        id: 'compose:zerniki',
+        name: 'zerniki',
+        profiles: [{ enabled: false, name: 'test' }],
+        services: [
+          {
+            bulkSelected: true,
+            cpuPercent: null,
+            id: 'compose:zerniki:postgres',
+            included: true,
+            memoryBytes: null,
+            name: 'postgres',
+            ports: [],
+            profiles: [],
+            status: 'not-created',
+          },
+          {
+            bulkSelected: true,
+            cpuPercent: null,
+            id: 'compose:zerniki:postgres-test',
+            included: false,
+            memoryBytes: null,
+            name: 'postgres-test',
+            ports: [],
+            profiles: ['test'],
+            status: 'not-created',
+          },
+        ],
+      });
+    }
+    return this.publish();
+  }
+
+  async removeProject(projectId: string): Promise<ApplicationSnapshot> {
+    await delay(this.latency);
+    const projectIndex = this.snapshot.projects.findIndex((project) => project.id === projectId);
+    if (projectIndex === -1) throw new Error('MOCK_PROJECT_NOT_FOUND');
+    this.snapshot.projects.splice(projectIndex, 1);
+    return this.publish();
+  }
+
   async runProjectAction(projectId: string, action: ProjectAction): Promise<ApplicationSnapshot> {
     await delay(this.latency);
     const project = this.requireProject(projectId);
 
     for (const service of project.services) {
-      if (!service.bulkSelected) continue;
+      if (!service.included || !service.bulkSelected) continue;
       service.status = action === 'start-selected' ? 'running' : 'stopped';
       service.cpuPercent = action === 'start-selected' ? 0.1 : null;
       service.memoryBytes = action === 'start-selected' ? 32 * 1024 * 1024 : null;
@@ -110,6 +155,17 @@ export class TestRuntimeClient implements RuntimeClient {
 
   async setProjectActive(projectId: string, active: boolean): Promise<ApplicationSnapshot> {
     this.requireProject(projectId).active = active;
+    return this.publish();
+  }
+
+  async setProjectProfiles(projectId: string, profiles: string[]): Promise<ApplicationSnapshot> {
+    const project = this.requireProject(projectId);
+    for (const profile of project.profiles) profile.enabled = profiles.includes(profile.name);
+    for (const service of project.services) {
+      service.included =
+        service.profiles.length === 0 ||
+        service.profiles.some((profile) => profiles.includes(profile));
+    }
     return this.publish();
   }
 

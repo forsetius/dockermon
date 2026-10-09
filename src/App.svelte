@@ -5,6 +5,7 @@
     Locale,
     NavigationView,
     ProjectAction,
+    ProjectImportKind,
     ServiceAction,
     ServiceSnapshot,
     ThemePreference,
@@ -13,6 +14,7 @@
   import { applyTheme } from './lib/theme';
   import ActivityView from './lib/components/ActivityView.svelte';
   import EmptyState from './lib/components/EmptyState.svelte';
+  import Icon from './lib/components/Icon.svelte';
   import LoadingState from './lib/components/LoadingState.svelte';
   import LogDrawer from './lib/components/LogDrawer.svelte';
   import PreferencesView from './lib/components/PreferencesView.svelte';
@@ -30,6 +32,7 @@
   let loadState = $state<'error' | 'loading' | 'ready'>('loading');
   let currentView = $state<NavigationView>('projects');
   let busyProjectId = $state<string | null>(null);
+  let importInProgress = $state(false);
   let busyServiceId = $state<string | null>(null);
   let selectedServiceId = $state<string | null>(null);
   let logLines = $state<string[]>([]);
@@ -94,10 +97,51 @@
     busyProjectId = projectId;
     try {
       snapshot = await runtimeClient.setProjectActive(projectId, active);
-    } catch {
-      showError();
+    } catch (error) {
+      showError(error);
     } finally {
       busyProjectId = null;
+    }
+  }
+
+  async function updateProjectProfiles(projectId: string, profiles: string[]): Promise<void> {
+    busyProjectId = projectId;
+    try {
+      snapshot = await runtimeClient.setProjectProfiles(projectId, profiles);
+    } catch (error) {
+      showError(error);
+    } finally {
+      busyProjectId = null;
+    }
+  }
+
+  async function removeProject(projectId: string, projectName: string): Promise<void> {
+    busyProjectId = projectId;
+    try {
+      snapshot = await runtimeClient.removeProject(projectId);
+      toast = {
+        message: translate(locale, 'projects.removed', { project: projectName }),
+        tone: 'success',
+      };
+    } catch (error) {
+      showError(error);
+    } finally {
+      busyProjectId = null;
+    }
+  }
+
+  async function importProject(kind: ProjectImportKind): Promise<void> {
+    importInProgress = true;
+    try {
+      const importedSnapshot = await runtimeClient.importProject(kind);
+      if (importedSnapshot) {
+        snapshot = importedSnapshot;
+        toast = { message: translate(locale, 'projects.imported'), tone: 'success' };
+      }
+    } catch (error) {
+      showError(error);
+    } finally {
+      importInProgress = false;
     }
   }
 
@@ -108,8 +152,8 @@
   ): Promise<void> {
     try {
       snapshot = await runtimeClient.setBulkSelected(projectId, service.id, selected);
-    } catch {
-      showError();
+    } catch (error) {
+      showError(error);
     }
   }
 
@@ -124,8 +168,8 @@
       const actionKey: TranslationKey =
         action === 'start-selected' ? 'action.startSelected' : 'action.stopSelected';
       showSuccess(projectName, translate(locale, actionKey));
-    } catch {
-      showError();
+    } catch (error) {
+      showError(error);
     } finally {
       busyProjectId = null;
     }
@@ -142,8 +186,8 @@
         stop: 'action.stop',
       };
       showSuccess(service.name, translate(locale, actionKeys[action], { service: service.name }));
-    } catch {
-      showError();
+    } catch (error) {
+      showError(error);
     } finally {
       busyServiceId = null;
     }
@@ -169,11 +213,19 @@
   }
 
   async function changeTheme(theme: ThemePreference): Promise<void> {
-    snapshot = await runtimeClient.setTheme(theme);
+    try {
+      snapshot = await runtimeClient.setTheme(theme);
+    } catch (error) {
+      showError(error);
+    }
   }
 
   async function changeLanguage(language: Locale): Promise<void> {
-    snapshot = await runtimeClient.setLanguage(language);
+    try {
+      snapshot = await runtimeClient.setLanguage(language);
+    } catch (error) {
+      showError(error);
+    }
   }
 
   function showSuccess(subject: string, action: string): void {
@@ -183,8 +235,25 @@
     };
   }
 
-  function showError(): void {
-    toast = { message: translate(locale, 'operation.failed'), tone: 'error' };
+  function showError(error?: unknown): void {
+    const code =
+      typeof error === 'object' && error !== null && 'code' in error
+        ? String(error.code)
+        : undefined;
+    const errorKeys: Partial<Record<string, TranslationKey>> = {
+      COMPOSE_CLI_NOT_FOUND: 'error.composeCliNotFound',
+      COMPOSE_CONFIG_UNAVAILABLE: 'error.composeConfigInvalid',
+      COMPOSE_CONFIG_INVALID: 'error.composeConfigInvalid',
+      COMPOSE_FILE_NOT_FOUND: 'error.composeFileNotFound',
+      CONFIG_INVALID: 'error.configInvalid',
+      CONFIG_READ_FAILED: 'error.configInvalid',
+      CONFIG_VERSION_UNSUPPORTED: 'error.configInvalid',
+      CONFIG_WRITE_FAILED: 'error.configWriteFailed',
+    };
+    toast = {
+      message: translate(locale, (code && errorKeys[code]) || 'operation.failed'),
+      tone: 'error',
+    };
   }
 </script>
 
@@ -205,16 +274,38 @@
     {:else if snapshot}
       {#if currentView === 'projects'}
         <section aria-labelledby="projects-title" class="projects-view">
-          <header class="page-heading">
-            <div class="title-line">
-              <h1 id="projects-title">{translate(locale, 'projects.title')}</h1>
-              <span class="count-badge">
-                {translateActiveProjectCount(locale, activeCount)}
-              </span>
+          <header class="page-heading projects-heading">
+            <div>
+              <div class="title-line">
+                <h1 id="projects-title">{translate(locale, 'projects.title')}</h1>
+                <span class="count-badge">
+                  {translateActiveProjectCount(locale, activeCount)}
+                </span>
+              </div>
+              {#if activeCount === 0}
+                <p>{translate(locale, 'projects.noneActive')}</p>
+              {/if}
             </div>
-            {#if activeCount === 0}
-              <p>{translate(locale, 'projects.noneActive')}</p>
-            {/if}
+            <div class="import-actions">
+              <button
+                class="text-button"
+                disabled={importInProgress}
+                onclick={() => importProject('directory')}
+                type="button"
+              >
+                <Icon name="folder-plus" size={17} />
+                {translate(locale, 'projects.importDirectory')}
+              </button>
+              <button
+                class="primary-button"
+                disabled={importInProgress}
+                onclick={() => importProject('files')}
+                type="button"
+              >
+                <Icon name="files" size={17} />
+                {translate(locale, 'projects.importFiles')}
+              </button>
+            </div>
           </header>
 
           {#if snapshot.projects.length === 0}
@@ -232,6 +323,8 @@
                   onbulk={(service, selected) => updateBulkSelection(project.id, service, selected)}
                   onlogs={openLogs}
                   onprojectaction={(action) => runProjectAction(project.id, project.name, action)}
+                  onprofiles={(profiles) => updateProjectProfiles(project.id, profiles)}
+                  onremove={() => removeProject(project.id, project.name)}
                   onserviceaction={runServiceAction}
                   {project}
                   {selectedServiceId}

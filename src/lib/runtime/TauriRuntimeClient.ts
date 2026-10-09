@@ -1,9 +1,11 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { open } from '@tauri-apps/plugin-dialog';
 import type {
   ApplicationSnapshot,
   Locale,
   ProjectAction,
+  ProjectImportKind,
   ServiceAction,
   ServiceLogSnapshot,
   ThemePreference,
@@ -17,6 +19,22 @@ export class TauriRuntimeClient implements RuntimeClient {
 
   getServiceLogs(serviceId: string): Promise<ServiceLogSnapshot> {
     return invoke('service_logs', { serviceId });
+  }
+
+  async importProject(kind: ProjectImportKind): Promise<ApplicationSnapshot | null> {
+    const selection = await open({
+      directory: kind === 'directory',
+      filters:
+        kind === 'files' ? [{ name: 'Docker Compose', extensions: ['yaml', 'yml'] }] : undefined,
+      multiple: kind === 'files',
+    });
+    if (selection === null) return null;
+    const paths = Array.isArray(selection) ? selection : [selection];
+    return invoke('import_project', { paths });
+  }
+
+  removeProject(projectId: string): Promise<ApplicationSnapshot> {
+    return invoke('remove_project', { projectId });
   }
 
   runProjectAction(projectId: string, action: ProjectAction): Promise<ApplicationSnapshot> {
@@ -41,6 +59,10 @@ export class TauriRuntimeClient implements RuntimeClient {
 
   setProjectActive(projectId: string, active: boolean): Promise<ApplicationSnapshot> {
     return invoke('set_project_active', { active, projectId });
+  }
+
+  setProjectProfiles(projectId: string, profiles: string[]): Promise<ApplicationSnapshot> {
+    return invoke('set_project_profiles', { profiles, projectId });
   }
 
   setTheme(theme: ThemePreference): Promise<ApplicationSnapshot> {

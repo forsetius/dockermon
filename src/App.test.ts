@@ -65,6 +65,40 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: 'Projekty' })).toBeInTheDocument();
   });
 
+  it('imports a Compose project and enables an optional profile', async () => {
+    renderApplication();
+    await screen.findByRole('heading', { name: 'Local projects' });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Add Compose files' }));
+
+    const project = await screen.findByTestId('project-compose:zerniki');
+    expect(within(project).getByTestId('service-compose:zerniki:postgres-test')).toHaveTextContent(
+      'Profile disabled',
+    );
+
+    await fireEvent.click(within(project).getByRole('checkbox', { name: 'test' }));
+
+    await waitFor(() => {
+      expect(
+        within(project).getByTestId('service-compose:zerniki:postgres-test'),
+      ).toHaveTextContent('Not created');
+    });
+    expect(within(project).getByRole('checkbox', { name: 'Service: postgres-test' })).toBeChecked();
+
+    await fireEvent.click(
+      within(project).getByRole('button', { name: 'Remove zerniki from Dockermon' }),
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('project-compose:zerniki')).not.toBeInTheDocument();
+    });
+    expect(
+      screen.getByText(
+        'Removed zerniki from Dockermon. Containers and Compose files were not changed.',
+      ),
+    ).toBeInTheDocument();
+  });
+
   it('opens, populates, and closes the log drawer from the keyboard', async () => {
     renderApplication();
     const project = await screen.findByTestId('project-api-local');

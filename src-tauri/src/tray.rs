@@ -22,11 +22,7 @@ pub fn build_tray<R: Runtime>(
     let menu = create_menu(app, snapshot)?;
 
     TrayIconBuilder::with_id(TRAY_ID)
-        .icon(
-            app.default_window_icon()
-                .expect("the application icon should be configured")
-                .clone(),
-        )
+        .icon(tray_icon(app, snapshot))
         .menu(&menu)
         .show_menu_on_left_click(true)
         .on_menu_event(handle_menu_event)
@@ -41,8 +37,28 @@ pub fn refresh_tray<R: Runtime>(
 ) -> tauri::Result<()> {
     if let Some(tray) = app.tray_by_id(TRAY_ID) {
         tray.set_menu(Some(create_menu(app, snapshot)?))?;
+        tray.set_icon(Some(tray_icon(app, snapshot)))?;
     }
     Ok(())
+}
+
+fn tray_icon<R: Runtime>(app: &AppHandle<R>, snapshot: &ApplicationSnapshot) -> Image<'static> {
+    let source = app
+        .default_window_icon()
+        .expect("the application icon should be configured");
+    let mut rgba = source.rgba().to_vec();
+    if !snapshot.projects.iter().any(|project| project.active) {
+        let (pixels, _) = rgba.as_chunks_mut::<4>();
+        for pixel in pixels {
+            let luminance =
+                ((u16::from(pixel[0]) * 54 + u16::from(pixel[1]) * 183 + u16::from(pixel[2]) * 19)
+                    / 256) as u8;
+            pixel[0] = luminance;
+            pixel[1] = luminance;
+            pixel[2] = luminance;
+        }
+    }
+    Image::new_owned(rgba, source.width(), source.height())
 }
 
 fn create_menu<R: Runtime>(
@@ -56,20 +72,20 @@ fn create_menu<R: Runtime>(
         let ready_count = project
             .services
             .iter()
-            .filter(|service| service.status.is_ready())
+            .filter(|service| service.included && service.status.is_ready())
+            .count();
+        let included_count = project
+            .services
+            .iter()
+            .filter(|service| service.included)
             .count();
         let project_menu = Submenu::new(
             app,
-            format!(
-                "{} {}/{}",
-                project.name,
-                ready_count,
-                project.services.len()
-            ),
+            format!("{} {}/{}", project.name, ready_count, included_count),
             true,
         )?;
 
-        for service in &project.services {
+        for service in project.services.iter().filter(|service| service.included) {
             append_service_action(
                 app,
                 &project_menu,

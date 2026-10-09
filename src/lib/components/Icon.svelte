@@ -5,6 +5,8 @@
     | 'close'
     | 'containers'
     | 'folder'
+    | 'folder-plus'
+    | 'files'
     | 'language'
     | 'logs'
     | 'maximize'
@@ -20,11 +22,17 @@
 </script>
 
 <svg aria-hidden="true" class="icon" fill="none" height={size} viewBox="0 0 24 24" width={size}>
-  {#if name === 'projects' || name === 'folder'}
+  {#if name === 'projects' || name === 'folder' || name === 'folder-plus'}
     <path
       d="M3.5 6.75h6l2 2h9v9.75a1.75 1.75 0 0 1-1.75 1.75H5.25A1.75 1.75 0 0 1 3.5 18.5V6.75Z"
     />
     <path d="M3.5 8.75V5.5c0-.97.78-1.75 1.75-1.75h3.62l2 2h4.38" />
+    {#if name === 'folder-plus'}
+      <path d="M16.5 12.5v5M14 15h5" />
+    {/if}
+  {:else if name === 'files'}
+    <path d="M7 3.5h7l3 3v13H7v-16Z" />
+    <path d="M14 3.5v3h3M4 7.5v13h9" />
   {:else if name === 'containers'}
     <path d="m12 2.75 8 4.5v9.5l-8 4.5-8-4.5v-9.5l8-4.5Z" />
     <path d="m4.3 7.42 7.7 4.33 7.7-4.33M12 11.75v9.5" />

@@ -11,6 +11,8 @@ export type ServiceAction = 'start' | 'stop' | 'restart' | 'resume';
 
 export type ProjectAction = 'start-selected' | 'stop-selected';
 
+export type ProjectImportKind = 'directory' | 'files';
+
 export type NavigationView = 'projects' | 'containers' | 'activity' | 'settings';
 
 export interface Preferences {
@@ -22,16 +24,24 @@ export interface ServiceSnapshot {
   bulkSelected: boolean;
   cpuPercent: number | null;
   id: string;
+  included: boolean;
   memoryBytes: number | null;
   name: string;
   ports: string[];
+  profiles: string[];
   status: ServiceStatus;
+}
+
+export interface ProjectProfileSnapshot {
+  enabled: boolean;
+  name: string;
 }
 
 export interface ProjectSnapshot {
   active: boolean;
   id: string;
   name: string;
+  profiles: ProjectProfileSnapshot[];
   services: ServiceSnapshot[];
 }
 

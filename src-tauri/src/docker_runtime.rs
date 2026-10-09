@@ -1,3 +1,4 @@
+use crate::project_catalog::{DiscoveredProject, ProjectCatalog};
 use crate::runtime::{
     ApplicationSnapshot, ConnectionStatus, Locale, Preferences, ProjectSnapshot,
     RuntimeCapabilities, RuntimeError, RuntimeOperation, RuntimeSupervisor, ServiceLogSnapshot,
@@ -14,7 +15,8 @@ use futures_util::{
     future::{BoxFuture, join_all},
 };
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
+    path::PathBuf,
     sync::Arc,
     time::Duration,
 };
@@ -22,11 +24,14 @@ use tokio::sync::{Mutex, RwLock};
 
 const COMPOSE_PROJECT_LABEL: &str = "com.docker.compose.project";
 const COMPOSE_SERVICE_LABEL: &str = "com.docker.compose.service";
+const COMPOSE_CONFIG_FILES_LABEL: &str = "com.docker.compose.project.config_files";
+const COMPOSE_WORKING_DIRECTORY_LABEL: &str = "com.docker.compose.project.working_dir";
 const EVENT_RETRY_LIMIT: Duration = Duration::from_secs(15);
 const FULL_SYNCHRONIZATION_INTERVAL: Duration = Duration::from_secs(30);
 const RESOURCE_SAMPLE_INTERVAL: Duration = Duration::from_secs(2);
 
 pub struct DockerRuntimeSupervisor {
+    catalog: Mutex<ProjectCatalog>,
     client: Mutex<Option<Docker>>,
     reconciliation_lock: Mutex<()>,
     state: RwLock<DockerRuntimeState>,
@@ -44,11 +49,20 @@ struct ResourceSample {
 
 impl DockerRuntimeSupervisor {
     pub fn new() -> Self {
+        let catalog = ProjectCatalog::load_default();
+        let preferences = catalog.preferences();
+        let projects = catalog.decorate_projects(Vec::new());
         Self {
+            catalog: Mutex::new(catalog),
             client: Mutex::new(None),
             reconciliation_lock: Mutex::new(()),
             state: RwLock::new(DockerRuntimeState {
-                snapshot: empty_snapshot(),
+                snapshot: {
+                    let mut snapshot = empty_snapshot();
+                    snapshot.preferences = preferences;
+                    snapshot.projects = projects;
+                    snapshot
+                },
             }),
         }
     }
@@ -104,7 +118,12 @@ impl DockerRuntimeSupervisor {
             None
         };
 
-        Ok(build_snapshot(containers, resources.as_ref(), previous))
+        let discoveries = discovered_projects(&containers);
+        let mut snapshot = build_snapshot(containers, resources.as_ref(), previous);
+        let mut catalog = self.catalog.lock().await;
+        snapshot.projects = catalog.merge_projects(snapshot.projects, discoveries).await;
+        snapshot.preferences = catalog.preferences();
+        Ok(snapshot)
     }
 
     async fn publish_current(&self, publish: &SnapshotPublisher, refresh_tray: bool) {
@@ -212,8 +231,25 @@ impl DockerRuntimeSupervisor {
         &self,
         operation: RuntimeOperation,
     ) -> Result<ApplicationSnapshot, RuntimeError> {
+        if let RuntimeOperation::ImportProject { paths } = operation {
+            self.catalog.lock().await.import_project(paths).await?;
+            {
+                let _reconciliation_guard = self.reconciliation_lock.lock().await;
+                let mut state = self.state.write().await;
+                let catalog = self.catalog.lock().await;
+                state.snapshot.projects =
+                    catalog.decorate_projects(state.snapshot.projects.clone());
+                state.snapshot.preferences = catalog.preferences();
+            }
+            return match self.reconcile(false).await {
+                Ok((snapshot, _)) => Ok(snapshot),
+                Err(_) => Ok(self.state.read().await.snapshot.clone()),
+            };
+        }
+
         let _reconciliation_guard = self.reconciliation_lock.lock().await;
         let mut state = self.state.write().await;
+        let mut catalog = self.catalog.lock().await;
 
         match operation {
             RuntimeOperation::SetBulkSelected {
@@ -232,10 +268,25 @@ impl DockerRuntimeSupervisor {
                     .iter_mut()
                     .find(|service| service.id == service_id)
                     .ok_or_else(|| RuntimeError::new("SERVICE_NOT_FOUND", false))?;
+                catalog.set_bulk_selected(&project.id, &service.name, selected)?;
                 service.bulk_selected = selected;
             }
             RuntimeOperation::SetLanguage(language) => {
+                catalog.set_language(language)?;
                 state.snapshot.preferences.language = language;
+            }
+            RuntimeOperation::RemoveProject { project_id } => {
+                if state
+                    .snapshot
+                    .projects
+                    .iter()
+                    .all(|project| project.id != project_id)
+                {
+                    return Err(RuntimeError::new("PROJECT_NOT_FOUND", false));
+                }
+                catalog.remove_project(&project_id)?;
+                state.snapshot.projects =
+                    catalog.decorate_projects(state.snapshot.projects.clone());
             }
             RuntimeOperation::SetProjectActive { active, project_id } => {
                 let project = state
@@ -244,9 +295,24 @@ impl DockerRuntimeSupervisor {
                     .iter_mut()
                     .find(|project| project.id == project_id)
                     .ok_or_else(|| RuntimeError::new("PROJECT_NOT_FOUND", false))?;
+                catalog.set_project_active(&project.id, active)?;
                 project.active = active;
             }
+            RuntimeOperation::SetProjectProfiles {
+                profiles,
+                project_id,
+            } => {
+                let project = state
+                    .snapshot
+                    .projects
+                    .iter_mut()
+                    .find(|project| project.id == project_id)
+                    .ok_or_else(|| RuntimeError::new("PROJECT_NOT_FOUND", false))?;
+                catalog.set_project_profiles(&project.id, profiles)?;
+                catalog.refresh_project(project);
+            }
             RuntimeOperation::SetTheme(theme) => {
+                catalog.set_theme(theme)?;
                 state.snapshot.preferences.theme = theme;
             }
             RuntimeOperation::RunProjectAction { action, project_id } => {
@@ -260,6 +326,7 @@ impl DockerRuntimeSupervisor {
             RuntimeOperation::StopAll => {
                 return Err(RuntimeError::new("RUNTIME_READ_ONLY", false));
             }
+            RuntimeOperation::ImportProject { .. } => unreachable!(),
         }
 
         Ok(state.snapshot.clone())
@@ -404,6 +471,7 @@ fn build_snapshot(
                 active,
                 id: project_id,
                 name: project_name,
+                profiles: Vec::new(),
                 services,
             }
         })
@@ -439,6 +507,58 @@ fn build_snapshot(
     }
 }
 
+fn discovered_projects(containers: &[ContainerSummary]) -> Vec<DiscoveredProject> {
+    let mut discoveries: BTreeMap<String, DiscoveredProject> = BTreeMap::new();
+
+    for container in containers {
+        let Some(labels) = container.labels.as_ref() else {
+            continue;
+        };
+        let (Some(project_name), Some(service_name), Some(working_directory), Some(config_files)) = (
+            labels.get(COMPOSE_PROJECT_LABEL),
+            labels.get(COMPOSE_SERVICE_LABEL),
+            labels.get(COMPOSE_WORKING_DIRECTORY_LABEL),
+            labels.get(COMPOSE_CONFIG_FILES_LABEL),
+        ) else {
+            continue;
+        };
+        let working_directory = PathBuf::from(working_directory);
+        let compose_files: Vec<_> = config_files
+            .split(',')
+            .map(str::trim)
+            .filter(|path| !path.is_empty())
+            .map(PathBuf::from)
+            .map(|path| {
+                if path.is_absolute() {
+                    path
+                } else {
+                    working_directory.join(path)
+                }
+            })
+            .collect();
+        if compose_files.is_empty() {
+            continue;
+        }
+
+        let project_id = compose_project_id(project_name);
+        let discovery =
+            discoveries
+                .entry(project_id.clone())
+                .or_insert_with(|| DiscoveredProject {
+                    compose_files,
+                    id: project_id,
+                    name: project_name.clone(),
+                    running_services: BTreeSet::new(),
+                    working_directory,
+                });
+        if container_state(container).can_stop() {
+            discovery.running_services.insert(service_name.clone());
+        }
+    }
+
+    discoveries.into_values().collect()
+}
+
 fn service_snapshot(
     id: String,
     name: String,
@@ -471,9 +591,11 @@ fn service_snapshot(
             .unwrap_or(default_bulk_selected),
         cpu_percent,
         id,
+        included: true,
         memory_bytes,
         name,
         ports,
+        profiles: Vec::new(),
         status,
     }
 }
@@ -712,12 +834,17 @@ fn tray_state_changed(previous: &ApplicationSnapshot, next: &ApplicationSnapshot
         .any(|(left, right)| {
             left.id != right.id
                 || left.active != right.active
+                || left.profiles != right.profiles
                 || left.services.len() != right.services.len()
                 || left
                     .services
                     .iter()
                     .zip(&right.services)
-                    .any(|(left, right)| left.id != right.id || left.status != right.status)
+                    .any(|(left, right)| {
+                        left.id != right.id
+                            || left.included != right.included
+                            || left.status != right.status
+                    })
         })
 }
 
@@ -845,6 +972,42 @@ mod tests {
             container_state(&container("one", "one", "paused", None, Vec::new())),
             ServiceStatus::Paused
         );
+    }
+
+    #[test]
+    fn reads_compose_source_metadata_from_container_labels() {
+        let mut labeled_container = container(
+            "web-1",
+            "zerniki-web-1",
+            "running",
+            Some(("zerniki", "web")),
+            Vec::new(),
+        );
+        let labels = labeled_container
+            .labels
+            .as_mut()
+            .expect("compose fixture should have labels");
+        labels.insert(
+            COMPOSE_WORKING_DIRECTORY_LABEL.to_owned(),
+            "/workspace/zerniki".to_owned(),
+        );
+        labels.insert(
+            COMPOSE_CONFIG_FILES_LABEL.to_owned(),
+            "compose.yaml,/workspace/shared.yaml".to_owned(),
+        );
+
+        let projects = discovered_projects(&[labeled_container]);
+
+        assert_eq!(projects.len(), 1);
+        assert_eq!(projects[0].id, "compose:zerniki");
+        assert_eq!(
+            projects[0].compose_files,
+            vec![
+                PathBuf::from("/workspace/zerniki/compose.yaml"),
+                PathBuf::from("/workspace/shared.yaml")
+            ]
+        );
+        assert!(projects[0].running_services.contains("web"));
     }
 
     #[test]
