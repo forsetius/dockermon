@@ -1,0 +1,6 @@
+packages:
+  - .
+
+minimumReleaseAgeExclude:
+  - '@tauri-apps/api@2.12.2'
+  - eslint-plugin-svelte@3.23.1
