@@ -203,6 +203,8 @@ The log drawer is 430px wide on desktop and uses the full viewport width on mobi
 
 The native tray keeps one submenu per visible project and exactly one item per service. Each item is labeled with the service name and uses its icon and click behavior for the single recommended action in the current state: start when absent, stopped, or failed; stop while starting, running, or healthy; restart when unhealthy; and resume when paused. When lifecycle operations are unavailable globally, service items remain visible but disabled.
 
+The projects heading pairs the active-project count with two compact import actions for a Compose directory or an ordered file selection. Optional Compose profiles appear beside the project identity as small checkbox controls. Services belonging only to disabled profiles remain in the table with a neutral `Profile disabled` badge while retaining their actual runtime state, but their bulk selection and lifecycle controls are unavailable until a profile includes them. A compact overflow menu at the end of each project toolbar contains secondary project actions. Its remove action affects only Dockermon's catalog entry and preferences; the localized success message explicitly confirms that Compose files and Docker resources were not changed.
+
 **The Scan Before Action Rule.** Keep names, state, CPU, memory, ports, and row actions in a consistent reading order. When horizontal space is insufficient, hide ports, then memory, then CPU; never hide the service name, state, or actions.
 
 ## Elevation & Depth

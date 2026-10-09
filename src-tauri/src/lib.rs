@@ -1,4 +1,5 @@
 mod docker_runtime;
+mod project_catalog;
 mod runtime;
 mod state;
 mod tray;
@@ -57,6 +58,34 @@ async fn run_service_action(
 }
 
 #[tauri::command]
+async fn import_project(
+    app: AppHandle,
+    coordinator: State<'_, StateCoordinator>,
+    paths: Vec<String>,
+) -> Result<ApplicationSnapshot, RuntimeError> {
+    apply_operation(
+        &app,
+        &coordinator,
+        RuntimeOperation::ImportProject { paths },
+    )
+    .await
+}
+
+#[tauri::command]
+async fn remove_project(
+    app: AppHandle,
+    coordinator: State<'_, StateCoordinator>,
+    project_id: String,
+) -> Result<ApplicationSnapshot, RuntimeError> {
+    apply_operation(
+        &app,
+        &coordinator,
+        RuntimeOperation::RemoveProject { project_id },
+    )
+    .await
+}
+
+#[tauri::command]
 async fn set_bulk_selected(
     app: AppHandle,
     coordinator: State<'_, StateCoordinator>,
@@ -87,6 +116,24 @@ async fn set_project_active(
         &app,
         &coordinator,
         RuntimeOperation::SetProjectActive { active, project_id },
+    )
+    .await
+}
+
+#[tauri::command]
+async fn set_project_profiles(
+    app: AppHandle,
+    coordinator: State<'_, StateCoordinator>,
+    project_id: String,
+    profiles: Vec<String>,
+) -> Result<ApplicationSnapshot, RuntimeError> {
+    apply_operation(
+        &app,
+        &coordinator,
+        RuntimeOperation::SetProjectProfiles {
+            profiles,
+            project_id,
+        },
     )
     .await
 }
@@ -139,6 +186,7 @@ pub(crate) fn show_main_window<R: Runtime>(app: &AppHandle<R>) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_single_instance::init(
             |app, _arguments, _working_directory| {
                 show_main_window(app);
@@ -147,12 +195,15 @@ pub fn run() {
         .manage(StateCoordinator::docker())
         .invoke_handler(tauri::generate_handler![
             application_snapshot,
+            import_project,
+            remove_project,
             run_project_action,
             run_service_action,
             service_logs,
             set_bulk_selected,
             set_language,
             set_project_active,
+            set_project_profiles,
             set_theme,
             stop_all,
         ])

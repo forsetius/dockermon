@@ -101,10 +101,19 @@ pub struct ServiceSnapshot {
     pub bulk_selected: bool,
     pub cpu_percent: Option<f64>,
     pub id: String,
+    pub included: bool,
     pub memory_bytes: Option<u64>,
     pub name: String,
     pub ports: Vec<String>,
+    pub profiles: Vec<String>,
     pub status: ServiceStatus,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectProfileSnapshot {
+    pub enabled: bool,
+    pub name: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -113,6 +122,7 @@ pub struct ProjectSnapshot {
     pub active: bool,
     pub id: String,
     pub name: String,
+    pub profiles: Vec<ProjectProfileSnapshot>,
     pub services: Vec<ServiceSnapshot>,
 }
 
@@ -182,6 +192,12 @@ pub enum RuntimeOperation {
         action: ServiceAction,
         service_id: String,
     },
+    ImportProject {
+        paths: Vec<String>,
+    },
+    RemoveProject {
+        project_id: String,
+    },
     SetBulkSelected {
         project_id: String,
         selected: bool,
@@ -190,6 +206,10 @@ pub enum RuntimeOperation {
     SetLanguage(Locale),
     SetProjectActive {
         active: bool,
+        project_id: String,
+    },
+    SetProjectProfiles {
+        profiles: Vec<String>,
         project_id: String,
     },
     SetTheme(ThemePreference),
@@ -314,7 +334,7 @@ impl RuntimeSupervisor for TestRuntimeSupervisor {
                     for service in project
                         .services
                         .iter_mut()
-                        .filter(|service| service.bulk_selected)
+                        .filter(|service| service.included && service.bulk_selected)
                     {
                         set_service_state(
                             service,
@@ -348,6 +368,18 @@ impl RuntimeSupervisor for TestRuntimeSupervisor {
                         service.name.clone(),
                     ));
                 }
+                RuntimeOperation::ImportProject { .. } => {
+                    return Err(RuntimeError::new("MOCK_IMPORT_NOT_AVAILABLE", false));
+                }
+                RuntimeOperation::RemoveProject { project_id } => {
+                    let project_index = state
+                        .snapshot
+                        .projects
+                        .iter()
+                        .position(|project| project.id == project_id)
+                        .ok_or_else(|| RuntimeError::not_found("MOCK_PROJECT_NOT_FOUND"))?;
+                    state.snapshot.projects.remove(project_index);
+                }
                 RuntimeOperation::SetBulkSelected {
                     project_id,
                     selected,
@@ -377,6 +409,27 @@ impl RuntimeSupervisor for TestRuntimeSupervisor {
                         .find(|project| project.id == project_id)
                         .ok_or_else(|| RuntimeError::not_found("MOCK_PROJECT_NOT_FOUND"))?;
                     project.active = active;
+                }
+                RuntimeOperation::SetProjectProfiles {
+                    profiles,
+                    project_id,
+                } => {
+                    let project = state
+                        .snapshot
+                        .projects
+                        .iter_mut()
+                        .find(|project| project.id == project_id)
+                        .ok_or_else(|| RuntimeError::not_found("MOCK_PROJECT_NOT_FOUND"))?;
+                    for profile in &mut project.profiles {
+                        profile.enabled = profiles.contains(&profile.name);
+                    }
+                    for service in &mut project.services {
+                        service.included = service.profiles.is_empty()
+                            || service
+                                .profiles
+                                .iter()
+                                .any(|profile| profiles.contains(profile));
+                    }
                 }
                 RuntimeOperation::SetTheme(theme) => {
                     state.snapshot.preferences.theme = theme;
@@ -490,9 +543,11 @@ fn service(
         bulk_selected,
         cpu_percent,
         id: id.to_owned(),
+        included: true,
         memory_bytes: memory_megabytes.map(|value| value * MEGABYTE),
         name: name.to_owned(),
         ports: ports.iter().map(|port| (*port).to_owned()).collect(),
+        profiles: Vec::new(),
         status,
     }
 }
@@ -531,6 +586,7 @@ fn fixture_snapshot() -> ApplicationSnapshot {
                 active: true,
                 id: "storefront".to_owned(),
                 name: "Sklep lokalny".to_owned(),
+                profiles: Vec::new(),
                 services: vec![
                     service(
                         "storefront-web",
@@ -574,6 +630,7 @@ fn fixture_snapshot() -> ApplicationSnapshot {
                 active: true,
                 id: "api-local".to_owned(),
                 name: "API lokalne".to_owned(),
+                profiles: Vec::new(),
                 services: vec![
                     service(
                         "api-local-web",
@@ -626,6 +683,7 @@ fn fixture_snapshot() -> ApplicationSnapshot {
                 active: false,
                 id: "docs-preview".to_owned(),
                 name: "Dokumentacja".to_owned(),
+                profiles: Vec::new(),
                 services: vec![service(
                     "docs-preview-site",
                     "site",

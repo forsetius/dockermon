@@ -45,6 +45,11 @@ Run the frontend without the desktop shell with `pnpm dev`.
 The browser build uses the same deterministic test data automatically. Append `?scenario=loading`,
 `?scenario=empty`, or `?scenario=error` to inspect non-happy-path states.
 
+Dockermon stores its versioned configuration in
+`$XDG_CONFIG_HOME/dockermon/config.json` or `~/.config/dockermon/config.json`. The file contains
+Compose paths, enabled profiles, active projects, bulk selections, language, and theme. Resolved
+environment variables and other Compose secrets are neither stored nor sent to the frontend.
+
 ## Stage 0 acceptance
 
 - The main window opens on Zorin OS 18.1.
@@ -79,3 +84,19 @@ The browser build uses the same deterministic test data automatically. Append `?
   terminating the application. Reconnection uses a bounded backoff.
 - Lifecycle actions and logs remain disabled in the production runtime until stages 4 and 5. The
   deterministic browser runtime continues to expose them for interface testing.
+
+## Stage 3 acceptance
+
+- Running Compose projects with configuration-path labels are registered automatically and remain
+  visible after their containers disappear.
+- A project can be imported from a directory or from an ordered selection of Compose files.
+- Removing a project forgets its Dockermon catalog entry and preferences without changing Compose
+  files or Docker resources. Explicitly removed projects remain ignored until they are imported
+  again.
+- Dockermon reads every service and profile through `docker compose --profile '*' config --format
+json` while retaining only safe catalog metadata.
+- Services from disabled profiles remain visible but do not affect project readiness or appear in
+  the tray submenu. Enabling a profile includes its services and selects newly available services
+  for project bulk actions by default.
+- Active projects, profile choices, bulk selections, theme, and language persist across restarts.
+- The tray shows active projects, or all projects with a neutral icon when none are active.

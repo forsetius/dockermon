@@ -75,6 +75,7 @@
     <div
       class="service-row service-data-row"
       class:selected={selectedServiceId === service.id}
+      class:excluded={!service.included}
       data-testid={`service-${service.id}`}
       role="row"
     >
@@ -84,6 +85,7 @@
             aria-label={`${translate(locale, 'service.name')}: ${service.name}`}
             checked={service.bulkSelected}
             class="selection-checkbox"
+            disabled={!service.included}
             onchange={(event) => onbulk?.(service, event.currentTarget.checked)}
             type="checkbox"
           />
@@ -92,6 +94,12 @@
       <span class="service-name" data-label={translate(locale, 'service.name')} role="cell">
         <Icon name="containers" size={19} />
         <strong>{service.name}</strong>
+        {#if service.profiles.length > 0}
+          <span class="service-profile">
+            {service.profiles.join(', ')}
+            {#if !service.included}· {translate(locale, 'status.profile-disabled')}{/if}
+          </span>
+        {/if}
       </span>
       <span class="service-status" data-label={translate(locale, 'service.status')} role="cell">
         <span aria-hidden="true" class="status-dot {service.status}"></span>
@@ -112,7 +120,10 @@
         <button
           aria-label={translate(locale, 'action.start', { service: service.name })}
           class="icon-button"
-          disabled={!actionsEnabled || !canStart(service.status) || busyServiceId !== null}
+          disabled={!service.included ||
+            !actionsEnabled ||
+            !canStart(service.status) ||
+            busyServiceId !== null}
           onclick={() => onaction(service, 'start')}
           title={translate(locale, 'action.start', { service: service.name })}
           type="button"
@@ -122,7 +133,10 @@
         <button
           aria-label={translate(locale, 'action.stop', { service: service.name })}
           class="icon-button"
-          disabled={!actionsEnabled || !canStop(service.status) || busyServiceId !== null}
+          disabled={!service.included ||
+            !actionsEnabled ||
+            !canStop(service.status) ||
+            busyServiceId !== null}
           onclick={() => onaction(service, 'stop')}
           title={translate(locale, 'action.stop', { service: service.name })}
           type="button"
@@ -132,7 +146,10 @@
         <button
           aria-label={translate(locale, 'action.restart', { service: service.name })}
           class="icon-button"
-          disabled={!actionsEnabled || !canRestart(service.status) || busyServiceId !== null}
+          disabled={!service.included ||
+            !actionsEnabled ||
+            !canRestart(service.status) ||
+            busyServiceId !== null}
           onclick={() => onaction(service, 'restart')}
           title={translate(locale, 'action.restart', { service: service.name })}
           type="button"
@@ -142,7 +159,7 @@
         <button
           aria-label={translate(locale, 'action.logs', { service: service.name })}
           class="icon-button"
-          disabled={!logsEnabled}
+          disabled={!service.included || !logsEnabled}
           onclick={() => onlogs(service)}
           title={translate(locale, 'action.logs', { service: service.name })}
           type="button"

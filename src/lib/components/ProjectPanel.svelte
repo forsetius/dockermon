@@ -8,6 +8,7 @@
   } from '../domain';
   import { translate } from '../i18n';
   import Icon from './Icon.svelte';
+  import ProjectActionsMenu from './ProjectActionsMenu.svelte';
   import ServiceTable from './ServiceTable.svelte';
   import Toggle from './Toggle.svelte';
 
@@ -20,6 +21,8 @@
     onactive,
     onbulk,
     onprojectaction,
+    onprofiles,
+    onremove,
     onserviceaction,
     onlogs,
     project,
@@ -33,6 +36,8 @@
     onactive: (active: boolean) => void;
     onbulk: (service: ServiceSnapshot, selected: boolean) => void;
     onprojectaction: (action: ProjectAction) => void;
+    onprofiles: (profiles: string[]) => void;
+    onremove: () => void;
     onserviceaction: (service: ServiceSnapshot, action: ServiceAction) => void;
     onlogs: (service: ServiceSnapshot) => void;
     project: ProjectSnapshot;
@@ -42,8 +47,9 @@
   let expanded = $state(true);
   let selectAllElement = $state<HTMLInputElement>();
 
-  const selectedCount = $derived(project.services.filter((service) => service.bulkSelected).length);
-  const allSelected = $derived(selectedCount > 0 && selectedCount === project.services.length);
+  const includedServices = $derived(project.services.filter((service) => service.included));
+  const selectedCount = $derived(includedServices.filter((service) => service.bulkSelected).length);
+  const allSelected = $derived(selectedCount > 0 && selectedCount === includedServices.length);
   const mixedSelection = $derived(selectedCount > 0 && !allSelected);
 
   $effect(() => {
@@ -51,23 +57,47 @@
   });
 
   const selectAll = (selected: boolean): void => {
-    for (const service of project.services) onbulk(service, selected);
+    for (const service of includedServices) onbulk(service, selected);
+  };
+
+  const toggleProfile = (profileName: string, enabled: boolean): void => {
+    const profiles = project.profiles
+      .filter((profile) => (profile.name === profileName ? enabled : profile.enabled))
+      .map((profile) => profile.name);
+    onprofiles(profiles);
   };
 </script>
 
 <section class="project-panel" data-testid={`project-${project.id}`}>
   <header class="project-header">
-    <button
-      aria-expanded={expanded}
-      aria-label={project.name}
-      class="disclosure"
-      onclick={() => (expanded = !expanded)}
-      type="button"
-    >
-      <span class:expanded class="chevron"><Icon name="chevron" size={20} /></span>
-      <Icon name="folder" size={24} />
-      <strong>{project.name}</strong>
-    </button>
+    <div class="project-identity">
+      <button
+        aria-expanded={expanded}
+        aria-label={project.name}
+        class="disclosure"
+        onclick={() => (expanded = !expanded)}
+        type="button"
+      >
+        <span class:expanded class="chevron"><Icon name="chevron" size={20} /></span>
+        <Icon name="folder" size={24} />
+        <strong>{project.name}</strong>
+      </button>
+      {#if project.profiles.length > 0}
+        <div aria-label={translate(locale, 'profiles.label')} class="profile-controls" role="group">
+          {#each project.profiles as profile (profile.name)}
+            <label class:enabled={profile.enabled} class="profile-control">
+              <input
+                checked={profile.enabled}
+                disabled={busyProjectId === project.id}
+                onchange={(event) => toggleProfile(profile.name, event.currentTarget.checked)}
+                type="checkbox"
+              />
+              <span>{profile.name}</span>
+            </label>
+          {/each}
+        </div>
+      {/if}
+    </div>
 
     <div class="project-controls">
       <label class="active-control">
@@ -99,6 +129,12 @@
         <Icon name="stop" size={15} />
         {translate(locale, 'action.stopSelected')}
       </button>
+      <ProjectActionsMenu
+        disabled={busyProjectId === project.id}
+        {locale}
+        {onremove}
+        projectName={project.name}
+      />
     </div>
   </header>
 
@@ -110,6 +146,7 @@
           bind:this={selectAllElement}
           checked={allSelected}
           class="selection-checkbox"
+          disabled={includedServices.length === 0 || busyProjectId === project.id}
           onchange={(event) => selectAll(event.currentTarget.checked)}
           type="checkbox"
         />
