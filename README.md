@@ -129,3 +129,5 @@ json` while retaining only safe catalog metadata.
   lines and follows the end of the stream by default.
 - Clearing the drawer affects only the visible buffer. Closing it, changing services, or leaving the
   application cancels the previous Docker log subscription.
+- On desktop, the drawer width can be changed by dragging its left edge or by focusing the separator
+  and using the arrow keys. Double-clicking the separator restores the 560px default width.

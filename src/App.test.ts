@@ -161,6 +161,46 @@ describe('App', () => {
     expect(runtimeClient.activeLogSubscriptionCount()).toBe(0);
   });
 
+  it('resizes the log drawer with pointer and keyboard controls', async () => {
+    const originalWindowWidth = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1920 });
+    try {
+      render(App, {
+        runtimeClient: new TestRuntimeClient({ latency: 0, logInterval: 0 }),
+      });
+      const project = await screen.findByTestId('project-api-local');
+      await fireEvent.click(within(project).getByRole('button', { name: 'Show logs for api' }));
+      const resizeHandle = await screen.findByRole('slider', { name: 'Resize log drawer' });
+      const appShell = document.querySelector<HTMLElement>('.app-shell');
+
+      await waitFor(() => expect(resizeHandle).toHaveAttribute('aria-valuemax', '1100'));
+      expect(appShell?.style.getPropertyValue('--log-drawer-width')).toBe('560px');
+      await fireEvent.keyDown(resizeHandle, { key: 'ArrowLeft' });
+      expect(appShell?.style.getPropertyValue('--log-drawer-width')).toBe('584px');
+      await fireEvent.keyDown(resizeHandle, { key: 'Home' });
+      expect(appShell?.style.getPropertyValue('--log-drawer-width')).toBe('360px');
+      await fireEvent.keyDown(resizeHandle, { key: 'End' });
+      expect(appShell?.style.getPropertyValue('--log-drawer-width')).toBe('1100px');
+
+      await fireEvent.pointerDown(resizeHandle, {
+        button: 0,
+        clientX: 1120,
+        pointerId: 1,
+      });
+      expect(appShell?.style.getPropertyValue('--log-drawer-width')).toBe('800px');
+      await fireEvent.pointerMove(resizeHandle, { clientX: 920, pointerId: 1 });
+      expect(appShell?.style.getPropertyValue('--log-drawer-width')).toBe('1000px');
+      await fireEvent.pointerUp(resizeHandle, { clientX: 920, pointerId: 1 });
+      await fireEvent.dblClick(resizeHandle);
+      expect(appShell?.style.getPropertyValue('--log-drawer-width')).toBe('560px');
+    } finally {
+      Object.defineProperty(window, 'innerWidth', {
+        configurable: true,
+        value: originalWindowWidth,
+      });
+    }
+  });
+
   it('streams into a bounded buffer and clearing affects only the current view', async () => {
     const runtimeClient = new TestRuntimeClient({ latency: 0, logInterval: 0 });
     render(App, { runtimeClient });

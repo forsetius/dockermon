@@ -39,6 +39,7 @@
   let logLines = $state<string[]>([]);
   let logsLoading = $state(false);
   let followLogs = $state(true);
+  let logDrawerWidth = $state(560);
   let toast = $state<{ details?: string[]; message: string; tone: 'error' | 'success' } | null>(
     null,
   );
@@ -342,7 +343,11 @@
   <title>Dockermon</title>
 </svelte:head>
 
-<div class="app-shell" class:drawer-open={selectedService !== null}>
+<div
+  class="app-shell"
+  class:drawer-open={selectedService !== null}
+  style={`--log-drawer-width: ${logDrawerWidth}px`}
+>
   <Sidebar {currentView} {locale} onselect={(view) => (currentView = view)} />
   <WindowHeader connection={snapshot?.connection ?? 'connecting'} {locale} />
 
@@ -474,7 +479,9 @@
         onclear={() => (logLines = [])}
         onclose={closeLogs}
         onfollow={(follow) => (followLogs = follow)}
+        onwidthchange={(width) => (logDrawerWidth = width)}
         serviceName={selectedService.name}
+        width={logDrawerWidth}
       />
     {/key}
   {/if}

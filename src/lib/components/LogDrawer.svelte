@@ -13,7 +13,9 @@
     onclear,
     onclose,
     onfollow,
+    onwidthchange,
     serviceName,
+    width,
   }: {
     follow: boolean;
     lines: string[];
@@ -22,12 +24,25 @@
     onclear: () => void;
     onclose: () => void;
     onfollow: (follow: boolean) => void;
+    onwidthchange: (width: number) => void;
     serviceName: string;
+    width: number;
   } = $props();
 
+  const skeletonLines = [0, 1, 2, 3, 4, 5, 6];
+  const defaultWidth = 560;
+  const minimumWidth = 360;
+  const maximumAbsoluteWidth = 1100;
+  const minimumWorkspaceWidth = 600;
+  const mobileBreakpoint = 700;
+  const compactSidebarBreakpoint = 980;
+  const compactSidebarWidth = 74;
+  const desktopSidebarWidth = 210;
+  const keyboardResizeStep = 24;
   let closeButton = $state<HTMLButtonElement>();
   let logViewport = $state<HTMLTextAreaElement>();
-  const skeletonLines = [0, 1, 2, 3, 4, 5, 6];
+  let maximumWidth = $state(calculateMaximumWidth());
+  let resizing = $state(false);
 
   $effect(() => {
     const lineCount = lines.length;
@@ -41,12 +56,84 @@
   onMount(() => {
     const previousFocus =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    updateMaximumWidth();
     closeButton?.focus();
-    return () => previousFocus?.focus();
+    return () => {
+      document.body.classList.remove('drawer-resizing');
+      previousFocus?.focus();
+    };
   });
+
+  function calculateMaximumWidth(): number {
+    if (window.innerWidth <= mobileBreakpoint) return maximumAbsoluteWidth;
+    const sidebarWidth =
+      window.innerWidth < compactSidebarBreakpoint ? compactSidebarWidth : desktopSidebarWidth;
+    return Math.max(
+      minimumWidth,
+      Math.min(maximumAbsoluteWidth, window.innerWidth - sidebarWidth - minimumWorkspaceWidth),
+    );
+  }
+
+  function updateMaximumWidth(): void {
+    if (window.innerWidth <= mobileBreakpoint) return;
+    maximumWidth = calculateMaximumWidth();
+    if (width > maximumWidth) onwidthchange(maximumWidth);
+  }
+
+  function clampWidth(nextWidth: number): number {
+    return Math.min(maximumWidth, Math.max(minimumWidth, Math.round(nextWidth)));
+  }
+
+  function resizeFromPointer(event: PointerEvent): void {
+    onwidthchange(clampWidth(window.innerWidth - event.clientX));
+  }
+
+  function startResize(event: PointerEvent): void {
+    if (event.button !== 0 || window.innerWidth <= mobileBreakpoint) return;
+    event.preventDefault();
+    resizing = true;
+    if (event.currentTarget instanceof HTMLElement) {
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+    }
+    document.body.classList.add('drawer-resizing');
+    resizeFromPointer(event);
+  }
+
+  function continueResize(event: PointerEvent): void {
+    if (resizing) resizeFromPointer(event);
+  }
+
+  function finishResize(event: PointerEvent): void {
+    if (!resizing) return;
+    resizing = false;
+    if (event.currentTarget instanceof HTMLElement) {
+      event.currentTarget.releasePointerCapture?.(event.pointerId);
+    }
+    document.body.classList.remove('drawer-resizing');
+  }
+
+  function resizeWithKeyboard(event: KeyboardEvent): void {
+    const resizeStep = event.shiftKey ? keyboardResizeStep * 2 : keyboardResizeStep;
+    const nextWidth =
+      event.key === 'ArrowLeft'
+        ? width + resizeStep
+        : event.key === 'ArrowRight'
+          ? width - resizeStep
+          : event.key === 'Home'
+            ? minimumWidth
+            : event.key === 'End'
+              ? maximumWidth
+              : null;
+    if (nextWidth === null) return;
+    event.preventDefault();
+    onwidthchange(clampWidth(nextWidth));
+  }
 </script>
 
-<svelte:window onkeydown={(event) => event.key === 'Escape' && onclose()} />
+<svelte:window
+  onkeydown={(event) => event.key === 'Escape' && onclose()}
+  onresize={updateMaximumWidth}
+/>
 
 <button
   aria-label={translate(locale, 'action.close')}
@@ -60,8 +147,29 @@
   aria-label={translate(locale, 'drawer.title', { service: serviceName })}
   class="log-drawer"
 >
+  <button
+    aria-label={translate(locale, 'drawer.resize')}
+    aria-orientation="horizontal"
+    aria-valuemax={maximumWidth}
+    aria-valuemin={minimumWidth}
+    aria-valuenow={width}
+    aria-valuetext={`${width} px`}
+    class:active={resizing}
+    class="drawer-resize-handle"
+    onkeydown={resizeWithKeyboard}
+    onpointercancel={finishResize}
+    onpointerdown={startResize}
+    onpointermove={continueResize}
+    onpointerup={finishResize}
+    ondblclick={() => onwidthchange(clampWidth(defaultWidth))}
+    role="slider"
+    tabindex="0"
+    title={translate(locale, 'drawer.resizeHint')}
+    type="button"
+  >
+    <span aria-hidden="true"></span>
+  </button>
   <header class="drawer-header">
-    <span aria-hidden="true" class="drawer-grip"></span>
     <h2>{translate(locale, 'drawer.title', { service: serviceName })}</h2>
     <button
       aria-label={translate(locale, 'action.close')}
