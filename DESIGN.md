@@ -26,6 +26,21 @@ colors:
   warning: '#925600'
   terminal: '#101821'
   terminal-text: '#dce6ef'
+  log-method-get: '#63d995'
+  log-method-post: '#68aefc'
+  log-method-patch: '#4bd2c5'
+  log-method-put: '#c59bf5'
+  log-method-delete: '#ff7784'
+  log-method-head: '#ffb45f'
+  log-status-success: '#65d99a'
+  log-status-redirect: '#f1d365'
+  log-status-client-error: '#ffad55'
+  log-status-server-error: '#ff6875'
+  log-time: '#f8fbff'
+  log-level-info: '#f8fbff'
+  log-level-warning: '#f1d365'
+  log-level-error: '#ffad55'
+  log-level-fatal: '#ff6875'
   on-accent: '#ffffff'
 typography:
   headline:
@@ -52,6 +67,11 @@ typography:
     fontWeight: 650
   mono:
     fontFamily: "'DejaVu Sans Mono', ui-monospace, monospace"
+    fontSize: '0.76rem'
+    fontWeight: 400
+    lineHeight: 1.62
+  log:
+    fontFamily: "'JetBrains Mono Variable', 'JetBrains Mono', 'DejaVu Sans Mono', monospace"
     fontSize: '0.76rem'
     fontWeight: 400
     lineHeight: 1.62
@@ -168,6 +188,15 @@ The palette combines a cool blue operational accent with blue-grey neutrals and 
 - **Deep Ink and Muted Slate:** Establish the content hierarchy while keeping metadata and metrics quiet.
 - **Terminal Navy:** Gives logs a dedicated high-contrast working surface with pale monospaced text.
 
+The terminal surface uses a restrained syntax palette for scan speed: GET and 2xx are green, POST
+is blue, PATCH is teal, PUT is purple, DELETE and 5xx are red, HEAD and 4xx are orange, 3xx is
+yellow, and the time portion of timestamps is bright white. Dark mode raises those syntax colors
+slightly (`#6ee7a7`, `#78b8ff`, `#5ce1d3`, `#d0a7ff`, `#ff8793`, `#ffc171`, `#72e3ab`,
+`#ffe078`, `#ffbc68`, `#ff7b87`, and `#ffffff`, respectively) against the darker terminal surface.
+Labels, numeric ranges, and fixed token positions preserve meaning without relying on color alone.
+Log levels reuse the same semantic ramp: LOG and INFO are bright white, WARN and WARNING are
+yellow, ERROR and ERR are orange, and FATAL is red.
+
 Dark mode keeps these semantic roles and overrides their values as follows: accent (`#2d91f8`), accent hover (`#4ca1f8`), accent wash (`#15395d`), accent text (`#69b2fb`), canvas (`#0d151d`), border (`#2b3744`), strong border (`#3a4857`), control border (`#516172`), muted control (`#34414e`), danger (`#ff525e`), danger wash (`#3b1c22`), header (`#121b24`), muted text (`#a8b4c2`), quiet text (`#7f8c9b`), panel (`#141e27`), hover panel (`#192631`), selected panel (`#193b5e`), sidebar (`#101922`), success (`#2bdc68`), warning (`#ffb31a`), and terminal (`#080d12`). Primary text becomes `#eef4fa`; terminal text remains unchanged.
 
 **The State Color Rule.** Green, amber, and red communicate runtime state or operation consequence; never use them as decorative accents.
@@ -178,9 +207,10 @@ Dark mode keeps these semantic roles and overrides their values as follows: acce
 
 **Display Font:** Inter (with the system sans-serif stack)
 **Body Font:** Inter (with the system sans-serif stack)
-**Label/Mono Font:** DejaVu Sans Mono (with the system monospace stack)
+**Data Mono Font:** DejaVu Sans Mono (with the system monospace stack)
+**Log Font:** Bundled JetBrains Mono Variable, with ligatures disabled and system monospace fallbacks
 
-**Character:** The sans-serif hierarchy is compact, direct, and optimized for a desktop utility. Weight and size create hierarchy without decorative type. Monospace is reserved for ports, logs, and values whose alignment matters.
+**Character:** The sans-serif hierarchy is compact, direct, and optimized for a desktop utility. Weight and size create hierarchy without decorative type. DejaVu Sans Mono remains the compact data face for ports, while the bundled JetBrains Mono improves small-text legibility in the log stream. Log ligatures are disabled so operators and punctuation preserve their literal form.
 
 ### Hierarchy
 

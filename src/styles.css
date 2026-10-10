@@ -38,6 +38,21 @@
   --terminal: #101821;
   --terminal-border: #283746;
   --terminal-text: #dce6ef;
+  --log-method-delete: #ff7784;
+  --log-method-get: #63d995;
+  --log-method-head: #ffb45f;
+  --log-method-patch: #4bd2c5;
+  --log-method-post: #68aefc;
+  --log-method-put: #c59bf5;
+  --log-status-client-error: #ffad55;
+  --log-status-redirect: #f1d365;
+  --log-status-server-error: #ff6875;
+  --log-status-success: #65d99a;
+  --log-time: #f8fbff;
+  --log-level-error: var(--log-status-client-error);
+  --log-level-fatal: var(--log-status-server-error);
+  --log-level-info: var(--log-time);
+  --log-level-warning: var(--log-status-redirect);
 }
 
 :root[data-theme='light'] {
@@ -74,6 +89,17 @@
   --terminal: #080d12;
   --terminal-border: #334251;
   --terminal-text: #dce6ef;
+  --log-method-delete: #ff8793;
+  --log-method-get: #6ee7a7;
+  --log-method-head: #ffc171;
+  --log-method-patch: #5ce1d3;
+  --log-method-post: #78b8ff;
+  --log-method-put: #d0a7ff;
+  --log-status-client-error: #ffbc68;
+  --log-status-redirect: #ffe078;
+  --log-status-server-error: #ff7b87;
+  --log-status-success: #72e3ab;
+  --log-time: #ffffff;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -106,6 +132,17 @@
     --terminal: #080d12;
     --terminal-border: #334251;
     --terminal-text: #dce6ef;
+    --log-method-delete: #ff8793;
+    --log-method-get: #6ee7a7;
+    --log-method-head: #ffc171;
+    --log-method-patch: #5ce1d3;
+    --log-method-post: #78b8ff;
+    --log-method-put: #d0a7ff;
+    --log-status-client-error: #ffbc68;
+    --log-status-redirect: #ffe078;
+    --log-status-server-error: #ff7b87;
+    --log-status-success: #72e3ab;
+    --log-time: #ffffff;
   }
 }
 
@@ -1376,8 +1413,12 @@ input:disabled {
   border-radius: 0;
   color: var(--terminal-text);
   background: var(--terminal);
-  font-family: 'DejaVu Sans Mono', ui-monospace, monospace;
+  font-family: 'JetBrains Mono Variable', 'JetBrains Mono', 'DejaVu Sans Mono', monospace;
   font-size: 0.76rem;
+  font-feature-settings:
+    'liga' 0,
+    'calt' 0;
+  font-variant-ligatures: none;
   line-height: 1.62;
   outline-offset: -3px;
   resize: none;
@@ -1385,9 +1426,85 @@ input:disabled {
   white-space: pre;
 }
 
-.log-viewport::placeholder {
+.log-line {
+  width: max-content;
+  min-width: 100%;
+  min-height: 1.62em;
+  white-space: pre;
+}
+
+.log-empty {
   color: color-mix(in srgb, var(--terminal-text) 56%, transparent);
-  opacity: 1;
+}
+
+.log-token {
+  font-weight: 650;
+}
+
+.log-token.time,
+.log-token[class*='http-status'] {
+  font-variant-numeric: tabular-nums;
+}
+
+.log-token.time {
+  color: var(--log-time);
+  font-weight: 500;
+}
+
+.log-token.http-method-get {
+  color: var(--log-method-get);
+}
+
+.log-token.http-method-post {
+  color: var(--log-method-post);
+}
+
+.log-token.http-method-patch {
+  color: var(--log-method-patch);
+}
+
+.log-token.http-method-put {
+  color: var(--log-method-put);
+}
+
+.log-token.http-method-delete {
+  color: var(--log-method-delete);
+}
+
+.log-token.http-method-head {
+  color: var(--log-method-head);
+}
+
+.log-token.http-status-success {
+  color: var(--log-status-success);
+}
+
+.log-token.http-status-redirect {
+  color: var(--log-status-redirect);
+}
+
+.log-token.http-status-client-error {
+  color: var(--log-status-client-error);
+}
+
+.log-token.http-status-server-error {
+  color: var(--log-status-server-error);
+}
+
+.log-token.log-level-info {
+  color: var(--log-level-info);
+}
+
+.log-token.log-level-warning {
+  color: var(--log-level-warning);
+}
+
+.log-token.log-level-error {
+  color: var(--log-level-error);
+}
+
+.log-token.log-level-fatal {
+  color: var(--log-level-fatal);
 }
 
 .log-skeleton {

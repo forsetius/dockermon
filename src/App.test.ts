@@ -162,10 +162,10 @@ describe('App', () => {
 
     const drawer = await screen.findByRole('complementary', { name: 'Logs · api' });
     expect(within(drawer).getByRole('button', { name: 'Close' })).toHaveFocus();
-    const logOutput = await within(drawer).findByRole<HTMLTextAreaElement>('textbox', {
+    const logOutput = await within(drawer).findByRole('log', {
       name: 'Logs · api',
     });
-    expect(logOutput.value).toContain('Server listening on :3000');
+    expect(logOutput).toHaveTextContent('Server listening on :3000');
 
     await fireEvent.keyDown(window, { key: 'Escape' });
     expect(screen.queryByRole('complementary', { name: 'Logs · api' })).not.toBeInTheDocument();
@@ -275,25 +275,51 @@ describe('App', () => {
 
     await fireEvent.click(within(project).getByRole('button', { name: 'Show logs for api' }));
     const drawer = await screen.findByRole('complementary', { name: 'Logs · api' });
-    const logOutput = await within(drawer).findByRole<HTMLTextAreaElement>('textbox', {
+    const logOutput = await within(drawer).findByRole('log', {
       name: 'Logs · api',
     });
     runtimeClient.emitServiceLogLines('api-local-api', ['live-before-clear']);
-    await waitFor(() => expect(logOutput.value).toContain('live-before-clear'));
+    await waitFor(() => expect(logOutput).toHaveTextContent('live-before-clear'));
 
     await fireEvent.click(within(drawer).getByRole('button', { name: 'Clear' }));
-    expect(logOutput.value).toBe('');
+    expect(logOutput).not.toHaveTextContent('live-before-clear');
     runtimeClient.emitServiceLogLines('api-local-api', ['live-after-clear']);
-    await waitFor(() => expect(logOutput.value).toBe('live-after-clear'));
+    await waitFor(() => expect(logOutput).toHaveTextContent('live-after-clear'));
 
     runtimeClient.emitServiceLogLines(
       'api-local-api',
       Array.from({ length: 2005 }, (_, index) => `bounded-${index.toString().padStart(4, '0')}`),
     );
     await waitFor(() => {
-      expect(logOutput.value).not.toContain('bounded-0000');
-      expect(logOutput.value).toContain('bounded-2004');
+      expect(logOutput).not.toHaveTextContent('bounded-0000');
+      expect(logOutput).toHaveTextContent('bounded-2004');
     });
+  });
+
+  it('renders HTTP and time log tokens with semantic classes', async () => {
+    const runtimeClient = new TestRuntimeClient({ latency: 0, logInterval: 0 });
+    render(App, { runtimeClient });
+    const project = await screen.findByTestId('project-api-local');
+
+    await fireEvent.click(within(project).getByRole('button', { name: 'Show logs for api' }));
+    const drawer = await screen.findByRole('complementary', { name: 'Logs · api' });
+    const logOutput = await within(drawer).findByRole('log', { name: 'Logs · api' });
+
+    runtimeClient.emitServiceLogLines('api-local-api', [
+      '2026-10-10T21:37:42.125Z GET /health 204',
+    ]);
+
+    await waitFor(() => expect(logOutput).toHaveTextContent('GET /health 204'));
+    expect(logOutput.querySelector('.log-level-info')).toHaveTextContent('INFO');
+    expect(logOutput.querySelector('.log-line:last-child .time')).toHaveTextContent(
+      '21:37:42.125Z',
+    );
+    expect(logOutput.querySelector('.log-line:last-child .http-method-get')).toHaveTextContent(
+      'GET',
+    );
+    expect(logOutput.querySelector('.log-line:last-child .http-status-success')).toHaveTextContent(
+      '204',
+    );
   });
 
   it('cancels the previous log stream when switching services', async () => {
@@ -307,15 +333,15 @@ describe('App', () => {
 
     await fireEvent.click(within(project).getByRole('button', { name: 'Show logs for web' }));
     const drawer = await screen.findByRole('complementary', { name: 'Logs · web' });
-    const logOutput = await within(drawer).findByRole<HTMLTextAreaElement>('textbox', {
+    const logOutput = await within(drawer).findByRole('log', {
       name: 'Logs · web',
     });
     await waitFor(() => expect(runtimeClient.activeLogSubscriptionCount()).toBe(1));
 
     runtimeClient.emitServiceLogLines('api-local-api', ['old-service-line']);
     runtimeClient.emitServiceLogLines('api-local-web', ['current-service-line']);
-    await waitFor(() => expect(logOutput.value).toContain('current-service-line'));
-    expect(logOutput.value).not.toContain('old-service-line');
+    await waitFor(() => expect(logOutput).toHaveTextContent('current-service-line'));
+    expect(logOutput).not.toHaveTextContent('old-service-line');
   });
 
   it('shows deterministic empty and error states', async () => {

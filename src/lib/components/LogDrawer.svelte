@@ -2,6 +2,7 @@
   import { onMount, tick } from 'svelte';
   import type { Locale } from '../domain';
   import { translate } from '../i18n';
+  import { tokenizeLogLine } from '../logHighlight';
   import Icon from './Icon.svelte';
   import Toggle from './Toggle.svelte';
 
@@ -53,10 +54,11 @@
   const desktopSidebarWidth = 210;
   const keyboardResizeStep = 24;
   let closeButton = $state<HTMLButtonElement>();
-  let logViewport = $state<HTMLTextAreaElement>();
+  let logViewport = $state<HTMLDivElement>();
   let maximumSize = $state(calculateMaximumSize());
   let resizing = $state(false);
   const currentSize = $derived(dock === 'right' ? width : height);
+  const highlightedLines = $derived(lines.map(tokenizeLogLine));
   const minimumSize = $derived(dock === 'right' ? minimumWidth : minimumHeight);
 
   $effect(() => {
@@ -248,13 +250,35 @@
       </div>
     </div>
   {:else}
-    <textarea
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex (The scrollable live log needs keyboard focus.) -->
+    <div
       aria-label={translate(locale, 'drawer.title', { service: serviceName })}
       aria-live="polite"
+      aria-relevant="additions text"
+      role="log"
+      tabindex="0"
       class="log-viewport"
       bind:this={logViewport}
-      placeholder={translate(locale, 'drawer.empty')}
-      readonly
-      value={lines.join('\n')}></textarea>
+    >
+      {#if highlightedLines.length === 0}
+        <span class="log-empty">{translate(locale, 'drawer.empty')}</span>
+      {:else}
+        {#each highlightedLines as tokens, lineIndex (lineIndex)}
+          <div class="log-line">
+            {#if tokens.length === 0}
+              <br />
+            {:else}
+              {#each tokens as token, tokenIndex (tokenIndex)}
+                {#if token.kind === 'text'}
+                  {token.value}
+                {:else}
+                  <span class="log-token {token.kind}">{token.value}</span>
+                {/if}
+              {/each}
+            {/if}
+          </div>
+        {/each}
+      {/if}
+    </div>
   {/if}
 </aside>

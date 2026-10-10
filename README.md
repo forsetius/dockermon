@@ -127,6 +127,12 @@ json` while retaining only safe catalog metadata.
   name. Terminal control sequences are removed before log text reaches the interface.
 - Log output is sent to the frontend in bounded batches, while the interface retains at most 2,000
   lines and follows the end of the stream by default.
+- HTTP methods, HTTP status classes, and the time portion of timestamps use semantic syntax colors
+  tuned separately for the light and dark application themes.
+- Structured and prefixed LOG, INFO, WARN, WARNING, ERROR, ERR, and FATAL levels use the matching
+  neutral, warning, error, and fatal syntax colors.
+- The log stream uses a locally bundled JetBrains Mono variable font with programming ligatures
+  disabled, so it remains readable and literal without a network request.
 - Clearing the drawer affects only the visible buffer. Closing it, changing services, or leaving the
   application cancels the previous Docker log subscription.
 - With at least 1360px of usable workspace width, logs dock on the right and expose a resizable left
