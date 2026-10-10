@@ -629,7 +629,8 @@ input:disabled {
 .active-control,
 .row-actions,
 .drawer-toolbar,
-.drawer-toolbar label {
+.drawer-toolbar-option,
+.drawer-toolbar-options {
   display: flex;
   align-items: center;
 }
@@ -1247,7 +1248,7 @@ input:disabled {
   right: 0;
   bottom: 0;
   display: grid;
-  grid-template-rows: 62px 58px minmax(0, 1fr);
+  grid-template-rows: 62px auto minmax(0, 1fr);
   background: var(--panel);
 }
 
@@ -1382,15 +1383,27 @@ input:disabled {
 }
 
 .drawer-toolbar {
+  min-height: 58px;
+  gap: 12px;
   justify-content: space-between;
-  padding: 0 18px;
+  padding: 8px 18px;
   border-bottom: 1px solid var(--border);
 }
 
-.drawer-toolbar label {
+.drawer-toolbar-options {
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.drawer-toolbar-option {
   gap: 10px;
   font-size: 0.84rem;
   font-weight: 580;
+}
+
+.drawer-toolbar > .text-button {
+  margin-inline-start: auto;
 }
 
 .text-button {

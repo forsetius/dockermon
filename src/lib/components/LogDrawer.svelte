@@ -2,11 +2,12 @@
   import { onMount, tick } from 'svelte';
   import type { Locale } from '../domain';
   import { translate } from '../i18n';
-  import { tokenizeLogLine } from '../logHighlight';
+  import { tokenizeLogLine, type LogToken } from '../logHighlight';
   import Icon from './Icon.svelte';
   import Toggle from './Toggle.svelte';
 
   let {
+    coloringEnabled,
     dock,
     follow,
     height,
@@ -15,6 +16,7 @@
     locale,
     onclear,
     onclose,
+    oncoloringchange,
     onfollow,
     onheightchange,
     onwidthchange,
@@ -22,6 +24,7 @@
     sidebarCollapsed,
     width,
   }: {
+    coloringEnabled: boolean;
     dock: 'bottom' | 'right';
     follow: boolean;
     height: number;
@@ -30,6 +33,7 @@
     locale: Locale;
     onclear: () => void;
     onclose: () => void;
+    oncoloringchange: (enabled: boolean) => void;
     onfollow: (follow: boolean) => void;
     onheightchange: (height: number) => void;
     onwidthchange: (width: number) => void;
@@ -58,7 +62,11 @@
   let maximumSize = $state(calculateMaximumSize());
   let resizing = $state(false);
   const currentSize = $derived(dock === 'right' ? width : height);
-  const highlightedLines = $derived(lines.map(tokenizeLogLine));
+  const displayedLines = $derived(
+    coloringEnabled
+      ? lines.map(tokenizeLogLine)
+      : lines.map((line): LogToken[] => (line.length > 0 ? [{ kind: 'text', value: line }] : [])),
+  );
   const minimumSize = $derived(dock === 'right' ? minimumWidth : minimumHeight);
 
   $effect(() => {
@@ -226,10 +234,20 @@
   </header>
 
   <div class="drawer-toolbar">
-    <label>
-      <Toggle checked={follow} label={translate(locale, 'drawer.follow')} onchange={onfollow} />
-      <span>{translate(locale, 'drawer.follow')}</span>
-    </label>
+    <div class="drawer-toolbar-options">
+      <div class="drawer-toolbar-option">
+        <Toggle checked={follow} label={translate(locale, 'drawer.follow')} onchange={onfollow} />
+        <span>{translate(locale, 'drawer.follow')}</span>
+      </div>
+      <div class="drawer-toolbar-option">
+        <Toggle
+          checked={coloringEnabled}
+          label={translate(locale, 'drawer.coloring')}
+          onchange={oncoloringchange}
+        />
+        <span>{translate(locale, 'drawer.coloring')}</span>
+      </div>
+    </div>
     <button
       class="text-button"
       disabled={loading || lines.length === 0}
@@ -260,10 +278,10 @@
       class="log-viewport"
       bind:this={logViewport}
     >
-      {#if highlightedLines.length === 0}
+      {#if displayedLines.length === 0}
         <span class="log-empty">{translate(locale, 'drawer.empty')}</span>
       {:else}
-        {#each highlightedLines as tokens, lineIndex (lineIndex)}
+        {#each displayedLines as tokens, lineIndex (lineIndex)}
           <div class="log-line">
             {#if tokens.length === 0}
               <br />

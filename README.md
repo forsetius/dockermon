@@ -131,6 +131,8 @@ json` while retaining only safe catalog metadata.
   tuned separately for the light and dark application themes.
 - Structured and prefixed LOG, INFO, WARN, WARNING, ERROR, ERR, and FATAL levels use the matching
   neutral, warning, error, and fatal syntax colors.
+- Log coloring is enabled by default and can be toggled independently of live following from the
+  drawer toolbar.
 - The log stream uses a locally bundled JetBrains Mono variable font with programming ligatures
   disabled, so it remains readable and literal without a network request.
 - Clearing the drawer affects only the visible buffer. Closing it, changing services, or leaving the

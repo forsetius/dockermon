@@ -195,7 +195,9 @@ slightly (`#6ee7a7`, `#78b8ff`, `#5ce1d3`, `#d0a7ff`, `#ff8793`, `#ffc171`, `#72
 `#ffe078`, `#ffbc68`, `#ff7b87`, and `#ffffff`, respectively) against the darker terminal surface.
 Labels, numeric ranges, and fixed token positions preserve meaning without relying on color alone.
 Log levels reuse the same semantic ramp: LOG and INFO are bright white, WARN and WARNING are
-yellow, ERROR and ERR are orange, and FATAL is red.
+yellow, ERROR and ERR are orange, and FATAL is red. The drawer toolbar places the Coloring toggle
+directly after Follow. Coloring is enabled by default and its session-local state applies to every
+service until the application exits.
 
 Dark mode keeps these semantic roles and overrides their values as follows: accent (`#2d91f8`), accent hover (`#4ca1f8`), accent wash (`#15395d`), accent text (`#69b2fb`), canvas (`#0d151d`), border (`#2b3744`), strong border (`#3a4857`), control border (`#516172`), muted control (`#34414e`), danger (`#ff525e`), danger wash (`#3b1c22`), header (`#121b24`), muted text (`#a8b4c2`), quiet text (`#7f8c9b`), panel (`#141e27`), hover panel (`#192631`), selected panel (`#193b5e`), sidebar (`#101922`), success (`#2bdc68`), warning (`#ffb31a`), and terminal (`#080d12`). Primary text becomes `#eef4fa`; terminal text remains unchanged.
 

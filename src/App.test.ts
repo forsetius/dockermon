@@ -322,6 +322,33 @@ describe('App', () => {
     );
   });
 
+  it('disables log coloring and retains the setting for the application session', async () => {
+    const runtimeClient = new TestRuntimeClient({ latency: 0, logInterval: 0 });
+    render(App, { runtimeClient });
+    const project = await screen.findByTestId('project-api-local');
+    const logTrigger = within(project).getByRole('button', { name: 'Show logs for api' });
+
+    await fireEvent.click(logTrigger);
+    let drawer = await screen.findByRole('complementary', { name: 'Logs · api' });
+    let coloringToggle = within(drawer).getByRole('checkbox', { name: 'Coloring' });
+    const logOutput = await within(drawer).findByRole('log', { name: 'Logs · api' });
+
+    expect(coloringToggle).toBeChecked();
+    runtimeClient.emitServiceLogLines('api-local-api', ['21:37:42 GET /health 204']);
+    await waitFor(() => expect(logOutput.querySelector('.log-token')).toBeInTheDocument());
+
+    await fireEvent.click(coloringToggle);
+    expect(coloringToggle).not.toBeChecked();
+    expect(logOutput).toHaveTextContent('21:37:42 GET /health 204');
+    expect(logOutput.querySelector('.log-token')).not.toBeInTheDocument();
+
+    await fireEvent.click(within(drawer).getByRole('button', { name: 'Close' }));
+    await fireEvent.click(logTrigger);
+    drawer = await screen.findByRole('complementary', { name: 'Logs · api' });
+    coloringToggle = within(drawer).getByRole('checkbox', { name: 'Coloring' });
+    expect(coloringToggle).not.toBeChecked();
+  });
+
   it('cancels the previous log stream when switching services', async () => {
     const runtimeClient = new TestRuntimeClient({ latency: 0, logInterval: 0 });
     render(App, { runtimeClient });

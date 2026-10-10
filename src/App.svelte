@@ -42,6 +42,7 @@
   let logLines = $state<string[]>([]);
   let logsLoading = $state(false);
   let followLogs = $state(true);
+  let logColoringEnabled = $state(true);
   let logDrawerWidth = $state(560);
   let logDrawerHeight = $state(380);
   let viewportWidth = $state(window.innerWidth);
@@ -491,6 +492,7 @@
   {#if selectedService}
     {#key selectedService.id}
       <LogDrawer
+        coloringEnabled={logColoringEnabled}
         dock={logDrawerDock}
         follow={followLogs}
         height={logDrawerHeight}
@@ -499,6 +501,7 @@
         {locale}
         onclear={() => (logLines = [])}
         onclose={closeLogs}
+        oncoloringchange={(enabled) => (logColoringEnabled = enabled)}
         onfollow={(follow) => (followLogs = follow)}
         onheightchange={(height) => (logDrawerHeight = height)}
         onwidthchange={(width) => (logDrawerWidth = width)}
