@@ -86,8 +86,6 @@ environment variables and other Compose secrets are neither stored nor sent to t
 - Ports and resource usage are aggregated across every container belonging to a Compose service.
 - Missing access to the Docker socket and Engine disconnections are shown in the interface without
   terminating the application. Reconnection uses a bounded backoff.
-- Logs remain disabled in the production runtime until stage 5. The deterministic browser runtime
-  continues to expose them for interface testing.
 
 ## Stage 3 acceptance
 
@@ -120,3 +118,29 @@ json` while retaining only safe catalog metadata.
   containers, networks, or volumes and never runs `docker compose down`.
 - Global stopping uses bounded concurrency, blocks other lifecycle actions, shows progress, and
   reports both the stopped count and individual container failures.
+
+## Stage 5 acceptance
+
+- Opening the log drawer loads the latest 200 lines and follows new output from every container
+  belonging to the selected Compose service or from the selected standalone container.
+- Multi-container services merge their streams and prefix each line with the originating container
+  name. Terminal control sequences are removed before log text reaches the interface.
+- Log output is sent to the frontend in bounded batches, while the interface retains at most 2,000
+  lines and follows the end of the stream by default.
+- HTTP methods, HTTP status classes, and the time portion of timestamps use semantic syntax colors
+  tuned separately for the light and dark application themes.
+- Structured and prefixed LOG, INFO, WARN, WARNING, ERROR, ERR, and FATAL levels use the matching
+  neutral, warning, error, and fatal syntax colors.
+- Log coloring is enabled by default and can be toggled independently of live following from the
+  drawer toolbar.
+- The log stream uses a locally bundled JetBrains Mono variable font with programming ligatures
+  disabled, so it remains readable and literal without a network request.
+- Clearing the drawer affects only the visible buffer. Closing it, changing services, or leaving the
+  application cancels the previous Docker log subscription.
+- With at least 1360px of usable workspace width, logs dock on the right and expose a resizable left
+  edge. In narrower desktop windows they dock at the bottom with a resizable top edge, preserving
+  horizontal room for complete log lines. Arrow keys resize the focused separator, and
+  double-clicking restores the orientation's default size.
+- The desktop sidebar can be collapsed manually to an icon rail. When the projects workspace becomes
+  narrower than 900px, project bulk actions switch to icon-only controls while keeping localized
+  accessible names and tooltips.

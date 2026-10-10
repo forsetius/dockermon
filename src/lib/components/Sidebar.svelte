@@ -25,7 +25,7 @@
   ];
 </script>
 
-<aside class="sidebar">
+<aside class="sidebar" id="primary-sidebar">
   <div class="brand">
     <DockermonMark size={38} />
     <span>Dockermon</span>

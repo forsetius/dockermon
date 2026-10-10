@@ -188,11 +188,20 @@ pub struct ServiceLogSnapshot {
     pub service_id: String,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RuntimeError {
     pub code: String,
     pub retryable: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ServiceLogBatch {
+    pub error: Option<RuntimeError>,
+    pub lines: Vec<String>,
+    pub service_id: String,
+    pub subscription_id: String,
 }
 
 impl RuntimeError {
@@ -243,6 +252,7 @@ pub enum RuntimeOperation {
 }
 
 pub type SnapshotPublisher = Arc<dyn Fn(ApplicationSnapshot, bool) + Send + Sync>;
+pub type LogPublisher = Arc<dyn Fn(ServiceLogBatch) + Send + Sync>;
 pub type VisibilityProbe = Arc<dyn Fn() -> bool + Send + Sync>;
 
 pub trait RuntimeSupervisor: Send + Sync {
@@ -250,10 +260,13 @@ pub trait RuntimeSupervisor: Send + Sync {
         &self,
         operation: RuntimeOperation,
     ) -> BoxFuture<'_, Result<ApplicationSnapshot, RuntimeError>>;
-    fn logs<'a>(
+    fn start_logs<'a>(
         &'a self,
         service_id: &'a str,
+        subscription_id: &'a str,
+        publish: LogPublisher,
     ) -> BoxFuture<'a, Result<ServiceLogSnapshot, RuntimeError>>;
+    fn stop_logs<'a>(&'a self, subscription_id: &'a str) -> BoxFuture<'a, ()>;
     fn snapshot(&self) -> BoxFuture<'_, Result<ApplicationSnapshot, RuntimeError>>;
     fn start_monitoring(
         self: Arc<Self>,
@@ -302,9 +315,11 @@ impl RuntimeSupervisor for TestRuntimeSupervisor {
         Box::pin(async move { Ok(self.state()?.snapshot.clone()) })
     }
 
-    fn logs<'a>(
+    fn start_logs<'a>(
         &'a self,
         service_id: &'a str,
+        _subscription_id: &'a str,
+        _publish: LogPublisher,
     ) -> BoxFuture<'a, Result<ServiceLogSnapshot, RuntimeError>> {
         Box::pin(async move {
             let state = self.state()?;
@@ -338,6 +353,10 @@ impl RuntimeSupervisor for TestRuntimeSupervisor {
                 service_id: service_id.to_owned(),
             })
         })
+    }
+
+    fn stop_logs<'a>(&'a self, _subscription_id: &'a str) -> BoxFuture<'a, ()> {
+        Box::pin(async {})
     }
 
     fn execute(

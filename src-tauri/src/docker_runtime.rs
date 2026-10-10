@@ -1,15 +1,19 @@
 use crate::project_catalog::{ComposeExecutionContext, DiscoveredProject, ProjectCatalog};
 use crate::runtime::{
     ApplicationSnapshot, ConnectionStatus, ContainerStopFailure, GlobalStopProgress,
-    GlobalStopReport, Locale, Preferences, ProjectAction, ProjectSnapshot, RuntimeCapabilities,
-    RuntimeError, RuntimeOperation, RuntimeSupervisor, ServiceAction, ServiceLogSnapshot,
-    ServiceSnapshot, ServiceStatus, SnapshotPublisher, ThemePreference, VisibilityProbe,
+    GlobalStopReport, Locale, LogPublisher, Preferences, ProjectAction, ProjectSnapshot,
+    RuntimeCapabilities, RuntimeError, RuntimeOperation, RuntimeSupervisor, ServiceAction,
+    ServiceLogBatch, ServiceLogSnapshot, ServiceSnapshot, ServiceStatus, SnapshotPublisher,
+    ThemePreference, VisibilityProbe,
 };
 use bollard::{
     Docker,
+    container::LogOutput,
     errors::Error as DockerError,
     models::{ContainerStatsResponse, ContainerSummary, PortSummary},
-    query_parameters::{EventsOptionsBuilder, ListContainersOptionsBuilder, StatsOptionsBuilder},
+    query_parameters::{
+        EventsOptionsBuilder, ListContainersOptionsBuilder, LogsOptionsBuilder, StatsOptionsBuilder,
+    },
 };
 use futures_util::{
     StreamExt,
@@ -17,14 +21,15 @@ use futures_util::{
     stream,
 };
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     ffi::OsString,
     path::PathBuf,
     sync::{Arc, RwLock as StandardRwLock},
-    time::Duration,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use tokio::process::Command;
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::{Mutex, RwLock, mpsc, watch};
+use tokio::time::MissedTickBehavior;
 
 const COMPOSE_PROJECT_LABEL: &str = "com.docker.compose.project";
 const COMPOSE_SERVICE_LABEL: &str = "com.docker.compose.service";
@@ -34,11 +39,16 @@ const EVENT_RETRY_LIMIT: Duration = Duration::from_secs(15);
 const FULL_SYNCHRONIZATION_INTERVAL: Duration = Duration::from_secs(30);
 const RESOURCE_SAMPLE_INTERVAL: Duration = Duration::from_secs(2);
 const GLOBAL_STOP_CONCURRENCY: usize = 4;
+const INITIAL_LOG_LINE_LIMIT: usize = 200;
+const LOG_BATCH_INTERVAL: Duration = Duration::from_millis(75);
+const LOG_BATCH_LINE_LIMIT: usize = 100;
 
 pub struct DockerRuntimeSupervisor {
     action_gate: RwLock<()>,
     catalog: Mutex<ProjectCatalog>,
     client: Mutex<Option<Docker>>,
+    log_subscription: Mutex<Option<ActiveLogSubscription>>,
+    log_transition_lock: Mutex<()>,
     operation_locks: Mutex<HashMap<String, Arc<Mutex<()>>>>,
     publisher: StandardRwLock<Option<SnapshotPublisher>>,
     reconciliation_lock: Mutex<()>,
@@ -47,6 +57,41 @@ pub struct DockerRuntimeSupervisor {
 
 struct DockerRuntimeState {
     snapshot: ApplicationSnapshot,
+}
+
+struct ActiveLogSubscription {
+    cancellation: watch::Sender<bool>,
+    id: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct LogTarget {
+    container_id: String,
+    container_name: String,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct HistoricalLogLine {
+    raw_line: String,
+    sort_key: String,
+    target_id: String,
+    text: String,
+}
+
+enum LogStreamItem {
+    Line(String),
+    Error(RuntimeError),
+}
+
+struct ServiceLogStream {
+    cancellation: watch::Receiver<bool>,
+    deduplication_keys: HashMap<String, HashSet<String>>,
+    docker: Docker,
+    publish: LogPublisher,
+    service_id: String,
+    since: i32,
+    subscription_id: String,
+    targets: Vec<LogTarget>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -64,6 +109,8 @@ impl DockerRuntimeSupervisor {
             action_gate: RwLock::new(()),
             catalog: Mutex::new(catalog),
             client: Mutex::new(None),
+            log_subscription: Mutex::new(None),
+            log_transition_lock: Mutex::new(()),
             operation_locks: Mutex::new(HashMap::new()),
             publisher: StandardRwLock::new(None),
             reconciliation_lock: Mutex::new(()),
@@ -109,6 +156,7 @@ impl DockerRuntimeSupervisor {
                 let mut state = self.state.write().await;
                 state.snapshot.connection = connection_status(&error);
                 state.snapshot.capabilities.lifecycle_actions = false;
+                state.snapshot.capabilities.logs = false;
                 Err(runtime_error)
             }
         }
@@ -266,6 +314,7 @@ impl DockerRuntimeSupervisor {
         let mut state = self.state.write().await;
         state.snapshot.connection = connection_status(error);
         state.snapshot.capabilities.lifecycle_actions = false;
+        state.snapshot.capabilities.logs = false;
     }
 
     async fn execute_operation(
@@ -571,6 +620,68 @@ impl DockerRuntimeSupervisor {
         drop(state);
         self.publish_snapshot(true).await;
     }
+
+    async fn start_log_subscription(
+        &self,
+        service_id: &str,
+        subscription_id: &str,
+        publish: LogPublisher,
+    ) -> Result<ServiceLogSnapshot, RuntimeError> {
+        let _transition_guard = self.log_transition_lock.lock().await;
+        self.cancel_log_subscription(None).await;
+
+        let docker = self.docker().await.map_err(|error| runtime_error(&error))?;
+        let options = ListContainersOptionsBuilder::default().all(true).build();
+        let containers = docker
+            .list_containers(Some(options))
+            .await
+            .map_err(|error| runtime_error(&error))?;
+        let snapshot = self.state.read().await.snapshot.clone();
+        let targets = log_targets(service_id, &snapshot, &containers)?;
+        let live_since = unix_timestamp();
+        let historical_lines = read_historical_logs(&docker, &targets).await?;
+        let (lines, deduplication_keys) = prepare_log_history(historical_lines);
+        let (cancellation, cancellation_receiver) = watch::channel(false);
+
+        *self.log_subscription.lock().await = Some(ActiveLogSubscription {
+            cancellation,
+            id: subscription_id.to_owned(),
+        });
+        tauri::async_runtime::spawn(stream_service_logs(ServiceLogStream {
+            cancellation: cancellation_receiver,
+            deduplication_keys,
+            docker,
+            publish,
+            service_id: service_id.to_owned(),
+            since: live_since,
+            subscription_id: subscription_id.to_owned(),
+            targets,
+        }));
+
+        Ok(ServiceLogSnapshot {
+            lines,
+            service_id: service_id.to_owned(),
+        })
+    }
+
+    async fn stop_log_subscription(&self, subscription_id: &str) {
+        let _transition_guard = self.log_transition_lock.lock().await;
+        self.cancel_log_subscription(Some(subscription_id)).await;
+    }
+
+    async fn cancel_log_subscription(&self, expected_id: Option<&str>) {
+        let mut active = self.log_subscription.lock().await;
+        if expected_id.is_some_and(|expected_id| {
+            active
+                .as_ref()
+                .is_none_or(|subscription| subscription.id != expected_id)
+        }) {
+            return;
+        }
+        if let Some(subscription) = active.take() {
+            let _ = subscription.cancellation.send(true);
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -705,6 +816,422 @@ fn global_stop_report(
     }
 }
 
+fn log_targets(
+    service_id: &str,
+    snapshot: &ApplicationSnapshot,
+    containers: &[ContainerSummary],
+) -> Result<Vec<LogTarget>, RuntimeError> {
+    let mut targets = if let Some(container_id) = service_id.strip_prefix("container:") {
+        containers
+            .iter()
+            .filter(|container| container.id.as_deref() == Some(container_id))
+            .filter_map(log_target)
+            .collect::<Vec<_>>()
+    } else {
+        let (project_name, service_name) = snapshot
+            .projects
+            .iter()
+            .find_map(|project| {
+                project
+                    .services
+                    .iter()
+                    .find(|service| service.id == service_id)
+                    .map(|service| (project.name.as_str(), service.name.as_str()))
+            })
+            .ok_or_else(|| RuntimeError::new("SERVICE_NOT_FOUND", false))?;
+        containers
+            .iter()
+            .filter(|container| {
+                let labels = container.labels.as_ref();
+                labels
+                    .and_then(|labels| labels.get(COMPOSE_PROJECT_LABEL))
+                    .map(String::as_str)
+                    == Some(project_name)
+                    && labels
+                        .and_then(|labels| labels.get(COMPOSE_SERVICE_LABEL))
+                        .map(String::as_str)
+                        == Some(service_name)
+            })
+            .filter_map(log_target)
+            .collect::<Vec<_>>()
+    };
+    targets.sort_by(|left, right| left.container_name.cmp(&right.container_name));
+    if targets.is_empty() {
+        Err(RuntimeError::new("SERVICE_HAS_NO_CONTAINERS", false))
+    } else {
+        Ok(targets)
+    }
+}
+
+fn log_target(container: &ContainerSummary) -> Option<LogTarget> {
+    Some(LogTarget {
+        container_id: container.id.clone()?,
+        container_name: container_name(container),
+    })
+}
+
+async fn read_historical_logs(
+    docker: &Docker,
+    targets: &[LogTarget],
+) -> Result<Vec<HistoricalLogLine>, RuntimeError> {
+    let multiple_containers = targets.len() > 1;
+    let histories = join_all(targets.iter().cloned().map(|target| {
+        let docker = docker.clone();
+        async move { read_container_log_history(&docker, target, multiple_containers).await }
+    }))
+    .await;
+    let mut lines = Vec::new();
+    for history in histories {
+        lines.extend(history?);
+    }
+    Ok(lines)
+}
+
+async fn read_container_log_history(
+    docker: &Docker,
+    target: LogTarget,
+    multiple_containers: bool,
+) -> Result<Vec<HistoricalLogLine>, RuntimeError> {
+    let options = LogsOptionsBuilder::default()
+        .follow(false)
+        .stdout(true)
+        .stderr(true)
+        .timestamps(true)
+        .tail(&INITIAL_LOG_LINE_LIMIT.to_string())
+        .build();
+    let mut output = docker.logs(&target.container_id, Some(options));
+    let mut decoder = LogLineDecoder::default();
+    let mut raw_lines = Vec::new();
+    while let Some(item) = output.next().await {
+        let item = item.map_err(|_| RuntimeError::new("LOGS_READ_FAILED", true))?;
+        raw_lines.extend(decoder.push(item));
+    }
+    if let Some(line) = decoder.finish() {
+        raw_lines.push(line);
+    }
+
+    Ok(raw_lines
+        .into_iter()
+        .enumerate()
+        .map(|(index, raw_line)| {
+            let (timestamp, message) = split_docker_timestamp(&raw_line);
+            let sort_key = timestamp
+                .map(str::to_owned)
+                .unwrap_or_else(|| format!("{}:{index:06}", target.container_name));
+            let text = format_log_line(message, &target.container_name, multiple_containers);
+            HistoricalLogLine {
+                raw_line,
+                sort_key,
+                target_id: target.container_id.clone(),
+                text,
+            }
+        })
+        .collect())
+}
+
+fn prepare_log_history(
+    mut history: Vec<HistoricalLogLine>,
+) -> (Vec<String>, HashMap<String, HashSet<String>>) {
+    history.sort_by(|left, right| {
+        left.sort_key
+            .cmp(&right.sort_key)
+            .then_with(|| left.target_id.cmp(&right.target_id))
+    });
+    let mut deduplication_keys: HashMap<String, HashSet<String>> = HashMap::new();
+    for line in &history {
+        deduplication_keys
+            .entry(line.target_id.clone())
+            .or_default()
+            .insert(line.raw_line.clone());
+    }
+    let keep_from = history.len().saturating_sub(INITIAL_LOG_LINE_LIMIT);
+    let lines = history
+        .into_iter()
+        .skip(keep_from)
+        .map(|line| line.text)
+        .collect();
+    (lines, deduplication_keys)
+}
+
+async fn stream_service_logs(stream: ServiceLogStream) {
+    let ServiceLogStream {
+        mut cancellation,
+        mut deduplication_keys,
+        docker,
+        publish,
+        service_id,
+        since,
+        subscription_id,
+        targets,
+    } = stream;
+    let multiple_containers = targets.len() > 1;
+    let (sender, mut receiver) = mpsc::channel(LOG_BATCH_LINE_LIMIT * 2);
+    for target in targets {
+        let docker = docker.clone();
+        let sender = sender.clone();
+        let cancellation = cancellation.clone();
+        let initial_lines = deduplication_keys
+            .remove(&target.container_id)
+            .unwrap_or_default();
+        tauri::async_runtime::spawn(stream_container_logs(
+            docker,
+            target,
+            multiple_containers,
+            since,
+            initial_lines,
+            cancellation,
+            sender,
+        ));
+    }
+    drop(sender);
+
+    let mut interval = tokio::time::interval(LOG_BATCH_INTERVAL);
+    interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+    let mut pending_lines = Vec::new();
+    loop {
+        tokio::select! {
+            changed = cancellation.changed() => {
+                if changed.is_err() || *cancellation.borrow() {
+                    break;
+                }
+            }
+            item = receiver.recv() => {
+                match item {
+                    Some(LogStreamItem::Line(line)) => {
+                        pending_lines.push(line);
+                        if pending_lines.len() >= LOG_BATCH_LINE_LIMIT {
+                            publish_log_batch(
+                                &publish,
+                                &service_id,
+                                &subscription_id,
+                                std::mem::take(&mut pending_lines),
+                                None,
+                            );
+                        }
+                    }
+                    Some(LogStreamItem::Error(error)) => {
+                        if !pending_lines.is_empty() {
+                            publish_log_batch(
+                                &publish,
+                                &service_id,
+                                &subscription_id,
+                                std::mem::take(&mut pending_lines),
+                                None,
+                            );
+                        }
+                        publish_log_batch(
+                            &publish,
+                            &service_id,
+                            &subscription_id,
+                            Vec::new(),
+                            Some(error),
+                        );
+                    }
+                    None => break,
+                }
+            }
+            _ = interval.tick() => {
+                if !pending_lines.is_empty() {
+                    publish_log_batch(
+                        &publish,
+                        &service_id,
+                        &subscription_id,
+                        std::mem::take(&mut pending_lines),
+                        None,
+                    );
+                }
+            }
+        }
+    }
+    if !pending_lines.is_empty() {
+        publish_log_batch(&publish, &service_id, &subscription_id, pending_lines, None);
+    }
+}
+
+async fn stream_container_logs(
+    docker: Docker,
+    target: LogTarget,
+    multiple_containers: bool,
+    since: i32,
+    mut initial_lines: HashSet<String>,
+    mut cancellation: watch::Receiver<bool>,
+    sender: mpsc::Sender<LogStreamItem>,
+) {
+    let options = LogsOptionsBuilder::default()
+        .follow(true)
+        .stdout(true)
+        .stderr(true)
+        .since(since)
+        .timestamps(true)
+        .tail("0")
+        .build();
+    let mut output = docker.logs(&target.container_id, Some(options));
+    let mut decoder = LogLineDecoder::default();
+    loop {
+        tokio::select! {
+            changed = cancellation.changed() => {
+                if changed.is_err() || *cancellation.borrow() {
+                    return;
+                }
+            }
+            item = output.next() => {
+                match item {
+                    Some(Ok(item)) => {
+                        for raw_line in decoder.push(item) {
+                            if initial_lines.remove(&raw_line) {
+                                continue;
+                            }
+                            let (_, message) = split_docker_timestamp(&raw_line);
+                            let line = format_log_line(
+                                message,
+                                &target.container_name,
+                                multiple_containers,
+                            );
+                            if sender.send(LogStreamItem::Line(line)).await.is_err() {
+                                return;
+                            }
+                        }
+                    }
+                    Some(Err(_)) => {
+                        let _ = sender
+                            .send(LogStreamItem::Error(RuntimeError::new(
+                                "LOG_STREAM_FAILED",
+                                true,
+                            )))
+                            .await;
+                        return;
+                    }
+                    None => break,
+                }
+            }
+        }
+    }
+    if let Some(raw_line) = decoder.finish()
+        && !initial_lines.remove(&raw_line)
+    {
+        let (_, message) = split_docker_timestamp(&raw_line);
+        let _ = sender
+            .send(LogStreamItem::Line(format_log_line(
+                message,
+                &target.container_name,
+                multiple_containers,
+            )))
+            .await;
+    }
+}
+
+fn publish_log_batch(
+    publish: &LogPublisher,
+    service_id: &str,
+    subscription_id: &str,
+    lines: Vec<String>,
+    error: Option<RuntimeError>,
+) {
+    publish(ServiceLogBatch {
+        error,
+        lines,
+        service_id: service_id.to_owned(),
+        subscription_id: subscription_id.to_owned(),
+    });
+}
+
+fn split_docker_timestamp(line: &str) -> (Option<&str>, &str) {
+    let Some((candidate, message)) = line.split_once(' ') else {
+        return (None, line);
+    };
+    if candidate.contains('T') && (candidate.ends_with('Z') || candidate.contains('+')) {
+        (Some(candidate), message)
+    } else {
+        (None, line)
+    }
+}
+
+fn format_log_line(message: &str, container_name: &str, include_prefix: bool) -> String {
+    let clean_message = strip_ansi(message).trim_end_matches('\r').to_owned();
+    if include_prefix {
+        format!("[{container_name}] {clean_message}")
+    } else {
+        clean_message
+    }
+}
+
+fn strip_ansi(value: &str) -> String {
+    #[derive(Clone, Copy)]
+    enum State {
+        Text,
+        Escape,
+        ControlSequence,
+        OperatingSystemCommand,
+        OperatingSystemCommandEscape,
+    }
+
+    let mut output = String::with_capacity(value.len());
+    let mut state = State::Text;
+    for character in value.chars() {
+        state = match state {
+            State::Text if character == '\u{1b}' => State::Escape,
+            State::Text => {
+                output.push(character);
+                State::Text
+            }
+            State::Escape if character == '[' => State::ControlSequence,
+            State::Escape if character == ']' => State::OperatingSystemCommand,
+            State::Escape => State::Text,
+            State::ControlSequence if ('@'..='~').contains(&character) => State::Text,
+            State::ControlSequence => State::ControlSequence,
+            State::OperatingSystemCommand if character == '\u{7}' => State::Text,
+            State::OperatingSystemCommand if character == '\u{1b}' => {
+                State::OperatingSystemCommandEscape
+            }
+            State::OperatingSystemCommand => State::OperatingSystemCommand,
+            State::OperatingSystemCommandEscape if character == '\\' => State::Text,
+            State::OperatingSystemCommandEscape if character == '\u{1b}' => {
+                State::OperatingSystemCommandEscape
+            }
+            State::OperatingSystemCommandEscape => State::OperatingSystemCommand,
+        };
+    }
+    output
+}
+
+#[derive(Default)]
+struct LogLineDecoder {
+    pending: Vec<u8>,
+}
+
+impl LogLineDecoder {
+    fn push(&mut self, output: LogOutput) -> Vec<String> {
+        self.pending.extend_from_slice(output.as_ref());
+        let mut lines = Vec::new();
+        while let Some(newline_index) = self.pending.iter().position(|byte| *byte == b'\n') {
+            let remainder = self.pending.split_off(newline_index + 1);
+            let line = std::mem::replace(&mut self.pending, remainder);
+            lines.push(decode_log_line(&line));
+        }
+        lines
+    }
+
+    fn finish(self) -> Option<String> {
+        (!self.pending.is_empty()).then(|| decode_log_line(&self.pending))
+    }
+}
+
+fn decode_log_line(line: &[u8]) -> String {
+    let without_newline = line.strip_suffix(b"\n").unwrap_or(line);
+    let without_carriage_return = without_newline
+        .strip_suffix(b"\r")
+        .unwrap_or(without_newline);
+    String::from_utf8_lossy(without_carriage_return).into_owned()
+}
+
+fn unix_timestamp() -> i32 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+        .min(i32::MAX as u64) as i32
+}
+
 impl RuntimeSupervisor for DockerRuntimeSupervisor {
     fn execute(
         &self,
@@ -713,11 +1240,20 @@ impl RuntimeSupervisor for DockerRuntimeSupervisor {
         Box::pin(async move { self.execute_operation(operation).await })
     }
 
-    fn logs<'a>(
+    fn start_logs<'a>(
         &'a self,
-        _service_id: &'a str,
+        service_id: &'a str,
+        subscription_id: &'a str,
+        publish: LogPublisher,
     ) -> BoxFuture<'a, Result<ServiceLogSnapshot, RuntimeError>> {
-        Box::pin(async move { Err(RuntimeError::new("LOGS_NOT_AVAILABLE", false)) })
+        Box::pin(async move {
+            self.start_log_subscription(service_id, subscription_id, publish)
+                .await
+        })
+    }
+
+    fn stop_logs<'a>(&'a self, subscription_id: &'a str) -> BoxFuture<'a, ()> {
+        Box::pin(async move { self.stop_log_subscription(subscription_id).await })
     }
 
     fn snapshot(&self) -> BoxFuture<'_, Result<ApplicationSnapshot, RuntimeError>> {
@@ -873,7 +1409,7 @@ fn build_snapshot(
         activity: previous.activity.clone(),
         capabilities: RuntimeCapabilities {
             lifecycle_actions: true,
-            logs: false,
+            logs: true,
         },
         connection: ConnectionStatus::Connected,
         global_stop_in_progress: previous.global_stop_in_progress,
@@ -1648,5 +2184,152 @@ mod tests {
         );
         assert_eq!(partial.failures[0].container_name, "beta");
         assert_eq!(partial.sequence, 2);
+    }
+
+    #[test]
+    fn resolves_every_container_for_a_compose_service_and_one_standalone_container() {
+        let containers = vec![
+            container(
+                "web-1",
+                "shop-web-1",
+                "running",
+                Some(("shop", "web")),
+                Vec::new(),
+            ),
+            container(
+                "web-2",
+                "shop-web-2",
+                "running",
+                Some(("shop", "web")),
+                Vec::new(),
+            ),
+            container("standalone", "local-cache", "running", None, Vec::new()),
+        ];
+        let snapshot = build_snapshot(containers.clone(), None, &empty_snapshot());
+
+        let compose_targets = log_targets("compose:shop:web", &snapshot, &containers)
+            .expect("Compose service should resolve its containers");
+        let standalone_targets = log_targets("container:standalone", &snapshot, &containers)
+            .expect("standalone service should resolve its container");
+
+        assert_eq!(
+            compose_targets
+                .iter()
+                .map(|target| target.container_name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["shop-web-1", "shop-web-2"]
+        );
+        assert_eq!(standalone_targets[0].container_name, "local-cache");
+    }
+
+    #[test]
+    fn limits_initial_log_history_and_keeps_deduplication_keys() {
+        let history = (0..205)
+            .map(|index| HistoricalLogLine {
+                raw_line: format!("raw-{index:03}"),
+                sort_key: format!("2026-01-01T00:00:{index:03}Z"),
+                target_id: "container".to_owned(),
+                text: format!("line-{index:03}"),
+            })
+            .collect();
+
+        let (lines, keys) = prepare_log_history(history);
+
+        assert_eq!(lines.len(), INITIAL_LOG_LINE_LIMIT);
+        assert_eq!(lines.first().map(String::as_str), Some("line-005"));
+        assert_eq!(lines.last().map(String::as_str), Some("line-204"));
+        assert_eq!(keys["container"].len(), 205);
+    }
+
+    #[test]
+    fn strips_terminal_control_sequences_without_removing_text() {
+        assert_eq!(
+            strip_ansi("\u{1b}[31mERROR\u{1b}[0m \u{1b}]0;title\u{7}message"),
+            "ERROR message"
+        );
+    }
+
+    #[test]
+    fn decodes_lines_split_across_docker_frames() {
+        let mut decoder = LogLineDecoder::default();
+
+        assert!(
+            decoder
+                .push(LogOutput::StdOut {
+                    message: "first ".into(),
+                })
+                .is_empty()
+        );
+        assert_eq!(
+            decoder.push(LogOutput::StdOut {
+                message: "line\nsecond\npartial".into(),
+            }),
+            vec!["first line", "second"]
+        );
+        assert_eq!(decoder.finish().as_deref(), Some("partial"));
+
+        let mut unicode_decoder = LogLineDecoder::default();
+        assert!(
+            unicode_decoder
+                .push(LogOutput::StdOut {
+                    message: vec![0xc5].into(),
+                })
+                .is_empty()
+        );
+        assert_eq!(
+            unicode_decoder.push(LogOutput::StdOut {
+                message: vec![0xbc, b'\n'].into(),
+            }),
+            vec!["ż"]
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires the dockermon-smoke-log-a and dockermon-smoke-log-b Docker fixtures"]
+    async fn streams_and_merges_logs_from_a_live_compose_service() {
+        let supervisor = DockerRuntimeSupervisor::new();
+        supervisor
+            .synchronize(false)
+            .await
+            .expect("Docker fixture should be discoverable");
+        let (sender, mut receiver) = mpsc::unbounded_channel();
+        let publish: LogPublisher = Arc::new(move |batch| {
+            let _ = sender.send(batch);
+        });
+
+        let initial = supervisor
+            .start_logs(
+                "compose:dockermon-smoke:logger",
+                "integration-test",
+                publish,
+            )
+            .await
+            .expect("log subscription should start");
+        assert!(initial.lines.len() <= INITIAL_LOG_LINE_LIMIT);
+        assert!(initial.lines.iter().all(|line| !line.contains('\u{1b}')));
+
+        let streamed_lines = tokio::time::timeout(Duration::from_secs(5), async {
+            let mut lines = Vec::new();
+            while !lines
+                .iter()
+                .any(|line: &String| line.starts_with("[dockermon-smoke-log-a]"))
+                || !lines
+                    .iter()
+                    .any(|line| line.starts_with("[dockermon-smoke-log-b]"))
+            {
+                let batch = receiver
+                    .recv()
+                    .await
+                    .expect("live log publisher should remain available");
+                assert_eq!(batch.error, None);
+                lines.extend(batch.lines);
+            }
+            lines
+        })
+        .await
+        .expect("both fixture containers should emit live logs");
+
+        assert!(streamed_lines.iter().all(|line| !line.contains('\u{1b}')));
+        supervisor.stop_logs("integration-test").await;
     }
 }

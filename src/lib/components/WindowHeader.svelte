@@ -7,9 +7,13 @@
   let {
     connection,
     locale,
+    ontogglesidebar,
+    sidebarCollapsed,
   }: {
     connection: ConnectionStatus;
     locale: Locale;
+    ontogglesidebar: () => void;
+    sidebarCollapsed: boolean;
   } = $props();
 
   const isTauri = (): boolean => '__TAURI_INTERNALS__' in window;
@@ -35,9 +39,22 @@
 </script>
 
 <header class="window-header" data-tauri-drag-region>
-  <div class="connection" data-tauri-drag-region role="status">
-    <span aria-hidden="true" class="connection-dot {connection}"></span>
-    <span>{translate(locale, connectionKeys[connection])}</span>
+  <div class="window-header-leading" data-tauri-drag-region>
+    <button
+      aria-controls="primary-sidebar"
+      aria-expanded={!sidebarCollapsed}
+      aria-label={translate(locale, sidebarCollapsed ? 'sidebar.expand' : 'sidebar.collapse')}
+      class="sidebar-toggle"
+      onclick={ontogglesidebar}
+      title={translate(locale, sidebarCollapsed ? 'sidebar.expand' : 'sidebar.collapse')}
+      type="button"
+    >
+      <Icon name="sidebar" size={19} />
+    </button>
+    <div class="connection" data-tauri-drag-region role="status">
+      <span aria-hidden="true" class="connection-dot {connection}"></span>
+      <span>{translate(locale, connectionKeys[connection])}</span>
+    </div>
   </div>
 
   <div class="window-controls">

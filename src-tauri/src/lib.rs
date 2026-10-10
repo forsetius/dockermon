@@ -5,8 +5,8 @@ mod state;
 mod tray;
 
 use runtime::{
-    ApplicationSnapshot, Locale, ProjectAction, RuntimeError, RuntimeOperation, ServiceAction,
-    ServiceLogSnapshot, ThemePreference,
+    ApplicationSnapshot, Locale, LogPublisher, ProjectAction, RuntimeError, RuntimeOperation,
+    ServiceAction, ServiceLogBatch, ServiceLogSnapshot, ThemePreference,
 };
 use state::StateCoordinator;
 use std::sync::Arc;
@@ -20,11 +20,28 @@ async fn application_snapshot(
 }
 
 #[tauri::command]
-async fn service_logs(
+async fn start_service_logs(
+    app: AppHandle,
     coordinator: State<'_, StateCoordinator>,
     service_id: String,
+    subscription_id: String,
 ) -> Result<ServiceLogSnapshot, RuntimeError> {
-    coordinator.logs(&service_id).await
+    let publisher_app = app.clone();
+    let publish: LogPublisher = Arc::new(move |batch: ServiceLogBatch| {
+        let _ = publisher_app.emit("service-log-batch", batch);
+    });
+    coordinator
+        .start_logs(&service_id, &subscription_id, publish)
+        .await
+}
+
+#[tauri::command]
+async fn stop_service_logs(
+    coordinator: State<'_, StateCoordinator>,
+    subscription_id: String,
+) -> Result<(), RuntimeError> {
+    coordinator.stop_logs(&subscription_id).await;
+    Ok(())
 }
 
 #[tauri::command]
@@ -199,7 +216,8 @@ pub fn run() {
             remove_project,
             run_project_action,
             run_service_action,
-            service_logs,
+            start_service_logs,
+            stop_service_logs,
             set_bulk_selected,
             set_language,
             set_project_active,

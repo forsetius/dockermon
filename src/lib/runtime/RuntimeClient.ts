@@ -4,15 +4,15 @@ import type {
   ProjectAction,
   ProjectImportKind,
   ServiceAction,
-  ServiceLogSnapshot,
+  ServiceLogBatch,
   ThemePreference,
 } from '../domain';
 
 export type SnapshotListener = (snapshot: ApplicationSnapshot) => void;
+export type ServiceLogListener = (batch: ServiceLogBatch) => void;
 
 export interface RuntimeClient {
   getSnapshot(): Promise<ApplicationSnapshot>;
-  getServiceLogs(serviceId: string): Promise<ServiceLogSnapshot>;
   importProject(kind: ProjectImportKind): Promise<ApplicationSnapshot | null>;
   removeProject(projectId: string): Promise<ApplicationSnapshot>;
   runProjectAction(projectId: string, action: ProjectAction): Promise<ApplicationSnapshot>;
@@ -28,4 +28,5 @@ export interface RuntimeClient {
   setTheme(theme: ThemePreference): Promise<ApplicationSnapshot>;
   stopAll(): Promise<ApplicationSnapshot>;
   subscribe(listener: SnapshotListener): Promise<() => void>;
+  subscribeServiceLogs(serviceId: string, listener: ServiceLogListener): Promise<() => void>;
 }

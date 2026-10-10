@@ -170,7 +170,7 @@
         <button
           aria-label={translate(locale, 'action.logs', { service: service.name })}
           class="icon-button"
-          disabled={!service.included || !logsEnabled}
+          disabled={!service.included || !logsEnabled || service.status === 'not-created'}
           onclick={() => onlogs(service)}
           title={translate(locale, 'action.logs', { service: service.name })}
           type="button"

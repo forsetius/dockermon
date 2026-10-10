@@ -7,6 +7,7 @@
     ProjectAction,
     ProjectImportKind,
     ServiceAction,
+    ServiceLogBatch,
     ServiceSnapshot,
     ThemePreference,
   } from './lib/domain';
@@ -26,11 +27,14 @@
   import { createRuntimeClient } from './lib/runtime/createRuntimeClient';
   import type { RuntimeClient } from './lib/runtime/RuntimeClient';
 
+  type LogDrawerDock = 'bottom' | 'right';
+
   let { runtimeClient = createRuntimeClient() }: { runtimeClient?: RuntimeClient } = $props();
 
   let snapshot = $state<ApplicationSnapshot | null>(null);
   let loadState = $state<'error' | 'loading' | 'ready'>('loading');
   let currentView = $state<NavigationView>('projects');
+  let sidebarCollapsed = $state(false);
   let busyProjectIds = $state<string[]>([]);
   let importInProgress = $state(false);
   let busyStandaloneServiceIds = $state<string[]>([]);
@@ -38,14 +42,27 @@
   let logLines = $state<string[]>([]);
   let logsLoading = $state(false);
   let followLogs = $state(true);
+  let logColoringEnabled = $state(true);
+  let logDrawerWidth = $state(560);
+  let logDrawerHeight = $state(380);
+  let viewportWidth = $state(window.innerWidth);
   let toast = $state<{ details?: string[]; message: string; tone: 'error' | 'success' } | null>(
     null,
   );
   let lastGlobalStopReportSequence = 0;
+  let logRequestSequence = 0;
+  let stopLogSubscription: (() => void) | undefined;
+
+  const logLineLimit = 2000;
+  const wideDrawerWorkspaceThreshold = 1360;
 
   const fallbackLocale: Locale = navigator.language.toLowerCase().startsWith('pl') ? 'pl' : 'en';
   const locale = $derived(snapshot?.preferences.language ?? fallbackLocale);
   const activeCount = $derived(snapshot?.projects.filter((project) => project.active).length ?? 0);
+  const sidebarWidth = $derived(sidebarCollapsed || viewportWidth <= 980 ? 74 : 210);
+  const logDrawerDock: LogDrawerDock = $derived(
+    viewportWidth - sidebarWidth >= wideDrawerWorkspaceThreshold ? 'right' : 'bottom',
+  );
   const selectedService = $derived.by(() => {
     if (!snapshot || !selectedServiceId) return null;
     return [
@@ -70,18 +87,9 @@
         unsubscribe = stopSubscription;
       });
 
-    const liveLogTimer = window.setInterval(() => {
-      if (!selectedService || !followLogs || logsLoading) return;
-      const timestamp = new Intl.DateTimeFormat('en-GB', {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-      }).format(new Date());
-      logLines = [...logLines.slice(-198), `[${timestamp}] [INFO] GET /api/health 200`];
-    }, 4000);
-
     return () => {
-      window.clearInterval(liveLogTimer);
+      logRequestSequence += 1;
+      stopActiveLogSubscription();
       unsubscribe?.();
     };
   });
@@ -202,22 +210,34 @@
   }
 
   async function openLogs(service: ServiceSnapshot): Promise<void> {
+    const requestSequence = ++logRequestSequence;
+    stopActiveLogSubscription();
     selectedServiceId = service.id;
     logsLoading = true;
+    followLogs = true;
     logLines = [];
     try {
-      const result = await runtimeClient.getServiceLogs(service.id);
-      if (selectedServiceId === result.serviceId) logLines = result.lines;
-    } catch {
-      showError();
+      const stopSubscription = await runtimeClient.subscribeServiceLogs(service.id, (batch) =>
+        receiveLogBatch(service.id, requestSequence, batch),
+      );
+      if (requestSequence !== logRequestSequence || selectedServiceId !== service.id) {
+        stopSubscription();
+        return;
+      }
+      stopLogSubscription = stopSubscription;
+    } catch (error) {
+      if (requestSequence === logRequestSequence) showError(error);
     } finally {
-      logsLoading = false;
+      if (requestSequence === logRequestSequence) logsLoading = false;
     }
   }
 
   function closeLogs(): void {
+    logRequestSequence += 1;
+    stopActiveLogSubscription();
     selectedServiceId = null;
     logLines = [];
+    logsLoading = false;
   }
 
   async function changeTheme(theme: ThemePreference): Promise<void> {
@@ -263,9 +283,13 @@
       DOCKER_PERMISSION_DENIED: 'error.dockerPermissionDenied',
       DOCKER_UNAVAILABLE: 'error.dockerUnavailable',
       GLOBAL_STOP_IN_PROGRESS: 'error.globalStopInProgress',
+      LOGS_READ_FAILED: 'error.logsReadFailed',
+      LOG_STREAM_FAILED: 'error.logStreamFailed',
       NO_SERVICES_SELECTED: 'error.noServicesSelected',
       PROJECT_SOURCE_UNAVAILABLE: 'error.projectSourceUnavailable',
       PROJECT_OPERATION_IN_PROGRESS: 'error.projectOperationInProgress',
+      SERVICE_HAS_NO_CONTAINERS: 'error.serviceHasNoContainers',
+      SERVICE_NOT_FOUND: 'error.serviceNotFound',
     };
     toast = {
       message: translate(locale, (code && errorKeys[code]) || 'operation.failed'),
@@ -283,6 +307,28 @@
     busyStandaloneServiceIds = busy
       ? [...busyStandaloneServiceIds.filter((candidate) => candidate !== serviceId), serviceId]
       : busyStandaloneServiceIds.filter((candidate) => candidate !== serviceId);
+  }
+
+  function receiveLogBatch(
+    serviceId: string,
+    requestSequence: number,
+    batch: ServiceLogBatch,
+  ): void {
+    if (
+      requestSequence !== logRequestSequence ||
+      selectedServiceId !== serviceId ||
+      batch.serviceId !== serviceId
+    )
+      return;
+    if (batch.error) showError(batch.error);
+    if (batch.lines.length > 0) {
+      logLines = [...logLines, ...batch.lines].slice(-logLineLimit);
+    }
+  }
+
+  function stopActiveLogSubscription(): void {
+    stopLogSubscription?.();
+    stopLogSubscription = undefined;
   }
 
   function receiveSnapshot(nextSnapshot: ApplicationSnapshot): void {
@@ -308,9 +354,22 @@
   <title>Dockermon</title>
 </svelte:head>
 
-<div class="app-shell" class:drawer-open={selectedService !== null}>
+<svelte:window onresize={() => (viewportWidth = window.innerWidth)} />
+
+<div
+  class="app-shell"
+  class:drawer-bottom={selectedService !== null && logDrawerDock === 'bottom'}
+  class:drawer-right={selectedService !== null && logDrawerDock === 'right'}
+  class:sidebar-collapsed={sidebarCollapsed}
+  style={`--log-drawer-width: ${logDrawerWidth}px; --log-drawer-height: ${logDrawerHeight}px`}
+>
   <Sidebar {currentView} {locale} onselect={(view) => (currentView = view)} />
-  <WindowHeader connection={snapshot?.connection ?? 'connecting'} {locale} />
+  <WindowHeader
+    connection={snapshot?.connection ?? 'connecting'}
+    {locale}
+    ontogglesidebar={() => (sidebarCollapsed = !sidebarCollapsed)}
+    {sidebarCollapsed}
+  />
 
   <main class="content-area">
     {#if loadState === 'loading'}
@@ -431,16 +490,26 @@
   </main>
 
   {#if selectedService}
-    <LogDrawer
-      follow={followLogs}
-      lines={logLines}
-      loading={logsLoading}
-      {locale}
-      onclear={() => (logLines = [])}
-      onclose={closeLogs}
-      onfollow={(follow) => (followLogs = follow)}
-      serviceName={selectedService.name}
-    />
+    {#key selectedService.id}
+      <LogDrawer
+        coloringEnabled={logColoringEnabled}
+        dock={logDrawerDock}
+        follow={followLogs}
+        height={logDrawerHeight}
+        lines={logLines}
+        loading={logsLoading}
+        {locale}
+        onclear={() => (logLines = [])}
+        onclose={closeLogs}
+        oncoloringchange={(enabled) => (logColoringEnabled = enabled)}
+        onfollow={(follow) => (followLogs = follow)}
+        onheightchange={(height) => (logDrawerHeight = height)}
+        onwidthchange={(width) => (logDrawerWidth = width)}
+        serviceName={selectedService.name}
+        {sidebarCollapsed}
+        width={logDrawerWidth}
+      />
+    {/key}
   {/if}
 
   {#if toast}

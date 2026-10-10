@@ -93,6 +93,18 @@ export interface ServiceLogSnapshot {
   serviceId: string;
 }
 
+export interface RuntimeFailure {
+  code: string;
+  retryable: boolean;
+}
+
+export interface ServiceLogBatch {
+  error: RuntimeFailure | null;
+  lines: string[];
+  serviceId: string;
+  subscriptionId: string;
+}
+
 export function isServiceReady(status: ServiceStatus): boolean {
   return status === 'running' || status === 'healthy';
 }

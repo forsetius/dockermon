@@ -96,6 +96,18 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: 'Projekty' })).toBeInTheDocument();
   });
 
+  it('collapses and expands the sidebar from the window header', async () => {
+    renderApplication();
+    await screen.findByRole('heading', { name: 'Local projects' });
+    const appShell = document.querySelector<HTMLElement>('.app-shell');
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }));
+    expect(appShell).toHaveClass('sidebar-collapsed');
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Expand sidebar' }));
+    expect(appShell).not.toHaveClass('sidebar-collapsed');
+  });
+
   it('imports a Compose project and enables an optional profile', async () => {
     renderApplication();
     await screen.findByRole('heading', { name: 'Local projects' });
@@ -139,7 +151,8 @@ describe('App', () => {
   });
 
   it('opens, populates, and closes the log drawer from the keyboard', async () => {
-    renderApplication();
+    const runtimeClient = new TestRuntimeClient({ latency: 0, logInterval: 0 });
+    render(App, { runtimeClient });
     const project = await screen.findByTestId('project-api-local');
 
     const logTrigger = within(project).getByRole('button', { name: 'Show logs for api' });
@@ -149,14 +162,213 @@ describe('App', () => {
 
     const drawer = await screen.findByRole('complementary', { name: 'Logs · api' });
     expect(within(drawer).getByRole('button', { name: 'Close' })).toHaveFocus();
-    const logOutput = await within(drawer).findByRole<HTMLTextAreaElement>('textbox', {
+    const logOutput = await within(drawer).findByRole('log', {
       name: 'Logs · api',
     });
-    expect(logOutput.value).toContain('Server listening on :3000');
+    expect(logOutput).toHaveTextContent('Server listening on :3000');
 
     await fireEvent.keyDown(window, { key: 'Escape' });
     expect(screen.queryByRole('complementary', { name: 'Logs · api' })).not.toBeInTheDocument();
     expect(logTrigger).toHaveFocus();
+    expect(runtimeClient.activeLogSubscriptionCount()).toBe(0);
+  });
+
+  it('resizes the right log drawer with pointer and keyboard controls', async () => {
+    const originalWindowWidth = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1920 });
+    try {
+      render(App, {
+        runtimeClient: new TestRuntimeClient({ latency: 0, logInterval: 0 }),
+      });
+      const project = await screen.findByTestId('project-api-local');
+      await fireEvent.click(within(project).getByRole('button', { name: 'Show logs for api' }));
+      const resizeHandle = await screen.findByRole('slider', { name: 'Resize log drawer' });
+      const appShell = document.querySelector<HTMLElement>('.app-shell');
+
+      await waitFor(() => expect(resizeHandle).toHaveAttribute('aria-valuemax', '1100'));
+      expect(appShell?.style.getPropertyValue('--log-drawer-width')).toBe('560px');
+      await fireEvent.keyDown(resizeHandle, { key: 'ArrowLeft' });
+      expect(appShell?.style.getPropertyValue('--log-drawer-width')).toBe('584px');
+      await fireEvent.keyDown(resizeHandle, { key: 'Home' });
+      expect(appShell?.style.getPropertyValue('--log-drawer-width')).toBe('360px');
+      await fireEvent.keyDown(resizeHandle, { key: 'End' });
+      expect(appShell?.style.getPropertyValue('--log-drawer-width')).toBe('1100px');
+
+      await fireEvent.pointerDown(resizeHandle, {
+        button: 0,
+        clientX: 1120,
+        pointerId: 1,
+      });
+      expect(appShell?.style.getPropertyValue('--log-drawer-width')).toBe('800px');
+      await fireEvent.pointerMove(resizeHandle, { clientX: 920, pointerId: 1 });
+      expect(appShell?.style.getPropertyValue('--log-drawer-width')).toBe('1000px');
+      await fireEvent.pointerUp(resizeHandle, { clientX: 920, pointerId: 1 });
+      await fireEvent.dblClick(resizeHandle);
+      expect(appShell?.style.getPropertyValue('--log-drawer-width')).toBe('560px');
+    } finally {
+      Object.defineProperty(window, 'innerWidth', {
+        configurable: true,
+        value: originalWindowWidth,
+      });
+    }
+  });
+
+  it('docks logs at the bottom in a narrow workspace and resizes their height', async () => {
+    const originalWindowWidth = window.innerWidth;
+    const originalWindowHeight = window.innerHeight;
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1200 });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 900 });
+    try {
+      render(App, {
+        runtimeClient: new TestRuntimeClient({ latency: 0, logInterval: 0 }),
+      });
+      const project = await screen.findByTestId('project-api-local');
+      await fireEvent.click(within(project).getByRole('button', { name: 'Show logs for api' }));
+      const drawer = await screen.findByRole('complementary', { name: 'Logs · api' });
+      const resizeHandle = screen.getByRole('slider', { name: 'Resize log drawer' });
+      const appShell = document.querySelector<HTMLElement>('.app-shell');
+
+      expect(drawer).toHaveClass('drawer-bottom');
+      expect(resizeHandle).toHaveAttribute('aria-orientation', 'vertical');
+      await waitFor(() => expect(resizeHandle).toHaveAttribute('aria-valuemax', '558'));
+      expect(appShell?.style.getPropertyValue('--log-drawer-height')).toBe('380px');
+
+      await fireEvent.keyDown(resizeHandle, { key: 'ArrowUp' });
+      expect(appShell?.style.getPropertyValue('--log-drawer-height')).toBe('404px');
+      await fireEvent.keyDown(resizeHandle, { key: 'Home' });
+      expect(appShell?.style.getPropertyValue('--log-drawer-height')).toBe('240px');
+      await fireEvent.keyDown(resizeHandle, { key: 'End' });
+      expect(appShell?.style.getPropertyValue('--log-drawer-height')).toBe('558px');
+
+      await fireEvent.pointerDown(resizeHandle, {
+        button: 0,
+        clientY: 600,
+        pointerId: 1,
+      });
+      expect(appShell?.style.getPropertyValue('--log-drawer-height')).toBe('300px');
+      await fireEvent.pointerMove(resizeHandle, { clientY: 500, pointerId: 1 });
+      expect(appShell?.style.getPropertyValue('--log-drawer-height')).toBe('400px');
+      await fireEvent.pointerUp(resizeHandle, { clientY: 500, pointerId: 1 });
+      await fireEvent.dblClick(resizeHandle);
+      expect(appShell?.style.getPropertyValue('--log-drawer-height')).toBe('380px');
+
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1920 });
+      await fireEvent(window, new Event('resize'));
+      await waitFor(() => expect(drawer).toHaveClass('drawer-right'));
+      expect(resizeHandle).toHaveAttribute('aria-orientation', 'horizontal');
+    } finally {
+      Object.defineProperty(window, 'innerWidth', {
+        configurable: true,
+        value: originalWindowWidth,
+      });
+      Object.defineProperty(window, 'innerHeight', {
+        configurable: true,
+        value: originalWindowHeight,
+      });
+    }
+  });
+
+  it('streams into a bounded buffer and clearing affects only the current view', async () => {
+    const runtimeClient = new TestRuntimeClient({ latency: 0, logInterval: 0 });
+    render(App, { runtimeClient });
+    const project = await screen.findByTestId('project-api-local');
+
+    await fireEvent.click(within(project).getByRole('button', { name: 'Show logs for api' }));
+    const drawer = await screen.findByRole('complementary', { name: 'Logs · api' });
+    const logOutput = await within(drawer).findByRole('log', {
+      name: 'Logs · api',
+    });
+    runtimeClient.emitServiceLogLines('api-local-api', ['live-before-clear']);
+    await waitFor(() => expect(logOutput).toHaveTextContent('live-before-clear'));
+
+    await fireEvent.click(within(drawer).getByRole('button', { name: 'Clear' }));
+    expect(logOutput).not.toHaveTextContent('live-before-clear');
+    runtimeClient.emitServiceLogLines('api-local-api', ['live-after-clear']);
+    await waitFor(() => expect(logOutput).toHaveTextContent('live-after-clear'));
+
+    runtimeClient.emitServiceLogLines(
+      'api-local-api',
+      Array.from({ length: 2005 }, (_, index) => `bounded-${index.toString().padStart(4, '0')}`),
+    );
+    await waitFor(() => {
+      expect(logOutput).not.toHaveTextContent('bounded-0000');
+      expect(logOutput).toHaveTextContent('bounded-2004');
+    });
+  });
+
+  it('renders HTTP and time log tokens with semantic classes', async () => {
+    const runtimeClient = new TestRuntimeClient({ latency: 0, logInterval: 0 });
+    render(App, { runtimeClient });
+    const project = await screen.findByTestId('project-api-local');
+
+    await fireEvent.click(within(project).getByRole('button', { name: 'Show logs for api' }));
+    const drawer = await screen.findByRole('complementary', { name: 'Logs · api' });
+    const logOutput = await within(drawer).findByRole('log', { name: 'Logs · api' });
+
+    runtimeClient.emitServiceLogLines('api-local-api', [
+      '2026-10-10T21:37:42.125Z GET /health 204',
+    ]);
+
+    await waitFor(() => expect(logOutput).toHaveTextContent('GET /health 204'));
+    expect(logOutput.querySelector('.log-level-info')).toHaveTextContent('INFO');
+    expect(logOutput.querySelector('.log-line:last-child .time')).toHaveTextContent(
+      '21:37:42.125Z',
+    );
+    expect(logOutput.querySelector('.log-line:last-child .http-method-get')).toHaveTextContent(
+      'GET',
+    );
+    expect(logOutput.querySelector('.log-line:last-child .http-status-success')).toHaveTextContent(
+      '204',
+    );
+  });
+
+  it('disables log coloring and retains the setting for the application session', async () => {
+    const runtimeClient = new TestRuntimeClient({ latency: 0, logInterval: 0 });
+    render(App, { runtimeClient });
+    const project = await screen.findByTestId('project-api-local');
+    const logTrigger = within(project).getByRole('button', { name: 'Show logs for api' });
+
+    await fireEvent.click(logTrigger);
+    let drawer = await screen.findByRole('complementary', { name: 'Logs · api' });
+    let coloringToggle = within(drawer).getByRole('checkbox', { name: 'Coloring' });
+    const logOutput = await within(drawer).findByRole('log', { name: 'Logs · api' });
+
+    expect(coloringToggle).toBeChecked();
+    runtimeClient.emitServiceLogLines('api-local-api', ['21:37:42 GET /health 204']);
+    await waitFor(() => expect(logOutput.querySelector('.log-token')).toBeInTheDocument());
+
+    await fireEvent.click(coloringToggle);
+    expect(coloringToggle).not.toBeChecked();
+    expect(logOutput).toHaveTextContent('21:37:42 GET /health 204');
+    expect(logOutput.querySelector('.log-token')).not.toBeInTheDocument();
+
+    await fireEvent.click(within(drawer).getByRole('button', { name: 'Close' }));
+    await fireEvent.click(logTrigger);
+    drawer = await screen.findByRole('complementary', { name: 'Logs · api' });
+    coloringToggle = within(drawer).getByRole('checkbox', { name: 'Coloring' });
+    expect(coloringToggle).not.toBeChecked();
+  });
+
+  it('cancels the previous log stream when switching services', async () => {
+    const runtimeClient = new TestRuntimeClient({ latency: 0, logInterval: 0 });
+    render(App, { runtimeClient });
+    const project = await screen.findByTestId('project-api-local');
+
+    await fireEvent.click(within(project).getByRole('button', { name: 'Show logs for api' }));
+    await screen.findByRole('complementary', { name: 'Logs · api' });
+    await waitFor(() => expect(runtimeClient.activeLogSubscriptionCount()).toBe(1));
+
+    await fireEvent.click(within(project).getByRole('button', { name: 'Show logs for web' }));
+    const drawer = await screen.findByRole('complementary', { name: 'Logs · web' });
+    const logOutput = await within(drawer).findByRole('log', {
+      name: 'Logs · web',
+    });
+    await waitFor(() => expect(runtimeClient.activeLogSubscriptionCount()).toBe(1));
+
+    runtimeClient.emitServiceLogLines('api-local-api', ['old-service-line']);
+    runtimeClient.emitServiceLogLines('api-local-web', ['current-service-line']);
+    await waitFor(() => expect(logOutput).toHaveTextContent('current-service-line'));
+    expect(logOutput).not.toHaveTextContent('old-service-line');
   });
 
   it('shows deterministic empty and error states', async () => {

@@ -26,6 +26,21 @@ colors:
   warning: '#925600'
   terminal: '#101821'
   terminal-text: '#dce6ef'
+  log-method-get: '#63d995'
+  log-method-post: '#68aefc'
+  log-method-patch: '#4bd2c5'
+  log-method-put: '#c59bf5'
+  log-method-delete: '#ff7784'
+  log-method-head: '#ffb45f'
+  log-status-success: '#65d99a'
+  log-status-redirect: '#f1d365'
+  log-status-client-error: '#ffad55'
+  log-status-server-error: '#ff6875'
+  log-time: '#f8fbff'
+  log-level-info: '#f8fbff'
+  log-level-warning: '#f1d365'
+  log-level-error: '#ffad55'
+  log-level-fatal: '#ff6875'
   on-accent: '#ffffff'
 typography:
   headline:
@@ -52,6 +67,11 @@ typography:
     fontWeight: 650
   mono:
     fontFamily: "'DejaVu Sans Mono', ui-monospace, monospace"
+    fontSize: '0.76rem'
+    fontWeight: 400
+    lineHeight: 1.62
+  log:
+    fontFamily: "'JetBrains Mono Variable', 'JetBrains Mono', 'DejaVu Sans Mono', monospace"
     fontSize: '0.76rem'
     fontWeight: 400
     lineHeight: 1.62
@@ -168,6 +188,17 @@ The palette combines a cool blue operational accent with blue-grey neutrals and 
 - **Deep Ink and Muted Slate:** Establish the content hierarchy while keeping metadata and metrics quiet.
 - **Terminal Navy:** Gives logs a dedicated high-contrast working surface with pale monospaced text.
 
+The terminal surface uses a restrained syntax palette for scan speed: GET and 2xx are green, POST
+is blue, PATCH is teal, PUT is purple, DELETE and 5xx are red, HEAD and 4xx are orange, 3xx is
+yellow, and the time portion of timestamps is bright white. Dark mode raises those syntax colors
+slightly (`#6ee7a7`, `#78b8ff`, `#5ce1d3`, `#d0a7ff`, `#ff8793`, `#ffc171`, `#72e3ab`,
+`#ffe078`, `#ffbc68`, `#ff7b87`, and `#ffffff`, respectively) against the darker terminal surface.
+Labels, numeric ranges, and fixed token positions preserve meaning without relying on color alone.
+Log levels reuse the same semantic ramp: LOG and INFO are bright white, WARN and WARNING are
+yellow, ERROR and ERR are orange, and FATAL is red. The drawer toolbar places the Coloring toggle
+directly after Follow. Coloring is enabled by default and its session-local state applies to every
+service until the application exits.
+
 Dark mode keeps these semantic roles and overrides their values as follows: accent (`#2d91f8`), accent hover (`#4ca1f8`), accent wash (`#15395d`), accent text (`#69b2fb`), canvas (`#0d151d`), border (`#2b3744`), strong border (`#3a4857`), control border (`#516172`), muted control (`#34414e`), danger (`#ff525e`), danger wash (`#3b1c22`), header (`#121b24`), muted text (`#a8b4c2`), quiet text (`#7f8c9b`), panel (`#141e27`), hover panel (`#192631`), selected panel (`#193b5e`), sidebar (`#101922`), success (`#2bdc68`), warning (`#ffb31a`), and terminal (`#080d12`). Primary text becomes `#eef4fa`; terminal text remains unchanged.
 
 **The State Color Rule.** Green, amber, and red communicate runtime state or operation consequence; never use them as decorative accents.
@@ -178,9 +209,10 @@ Dark mode keeps these semantic roles and overrides their values as follows: acce
 
 **Display Font:** Inter (with the system sans-serif stack)
 **Body Font:** Inter (with the system sans-serif stack)
-**Label/Mono Font:** DejaVu Sans Mono (with the system monospace stack)
+**Data Mono Font:** DejaVu Sans Mono (with the system monospace stack)
+**Log Font:** Bundled JetBrains Mono Variable, with ligatures disabled and system monospace fallbacks
 
-**Character:** The sans-serif hierarchy is compact, direct, and optimized for a desktop utility. Weight and size create hierarchy without decorative type. Monospace is reserved for ports, logs, and values whose alignment matters.
+**Character:** The sans-serif hierarchy is compact, direct, and optimized for a desktop utility. Weight and size create hierarchy without decorative type. DejaVu Sans Mono remains the compact data face for ports, while the bundled JetBrains Mono improves small-text legibility in the log stream. Log ligatures are disabled so operators and punctuation preserve their literal form.
 
 ### Hierarchy
 
@@ -197,9 +229,9 @@ Dark mode keeps these semantic roles and overrides their values as follows: acce
 
 The desktop shell is a fixed viewport grid with a left sidebar (210px), a top window header (62px), and a scrollable content region. The main project view uses the full available content width with 24px outer padding so operational columns benefit from large desktop windows; secondary and settings views remain constrained to 960px for comfortable reading. Project panels stack with 18px gaps; rows remain compact at 40–44px high so several services stay visible at once.
 
-Below 980px, the sidebar collapses to a 74px icon rail. As the table loses horizontal space, observability columns disappear in a fixed priority order: ports first, then memory, then CPU. The rule responds to both window width and the table's actual container width, including space lost to the log drawer. Below 700px, the sidebar becomes a fixed 64px bottom navigation bar, the top header becomes 56px, and the content padding becomes 18px 14px 88px. Service rows become compact cards that retain the bulk checkbox, service name, state, and actions. Project actions form a two-column grid, with the active-project toggle on its own row.
+Below 980px, the sidebar collapses to a 74px icon rail. The same rail can be enabled manually at wider window sizes through the sidebar control in the window header; the control remains next to the sidebar boundary as the layout changes. As the table loses horizontal space, observability columns disappear in a fixed priority order: ports first, then memory, then CPU. The rule responds to both window width and the table's actual container width, including space lost to the log drawer. When the projects workspace is narrower than 900px, bulk start and stop actions retain their localized accessible names but display only their icons so the project header remains on one row. Below 700px, the sidebar becomes a fixed 64px bottom navigation bar, the top header becomes 56px, and the content padding becomes 18px 14px 88px. Service rows become compact cards that retain the bulk checkbox, service name, state, and actions. Project actions form a two-column grid, with the active-project toggle on its own row and full bulk-action labels restored.
 
-The log drawer is 430px wide on desktop and uses the full viewport width on mobile. At 1280px and above, the underlying workspace yields 430px to the open drawer instead of being obscured. Narrow screens use a backdrop and treat the drawer as a modal layer.
+The log drawer adapts to the usable workspace width measured before the drawer opens, preventing layout feedback loops. At 1360px or more it docks on the right, is 560px wide by default, and can be resized from 360px up to 1100px while reserving at least 600px for the workspace whenever possible. Below that threshold it docks at the bottom, is 380px high by default, and can be resized from 240px up to 720px while reserving at least 280px of workspace height. The workspace yields the drawer's current width or height instead of being obscured. The adjacent edge is pointer-draggable and keyboard-operable; double-clicking restores the default size. At 700px and below, the drawer uses the full viewport, hides the resize separator, and retains its modal backdrop behavior.
 
 The native tray keeps one submenu per visible project and exactly one item per service. Each item is labeled with the service name and uses its icon and click behavior for the single recommended action in the current state: start when absent, stopped, or failed; stop while starting, running, or healthy; restart when unhealthy; and resume when paused. When lifecycle operations are unavailable globally, service items remain visible but disabled.
 
@@ -214,7 +246,7 @@ The system is flat by default. Borders, surface tone, and selected-row fills est
 ### Shadow Vocabulary
 
 - **Floating Feedback** (`0 18px 42px rgb(30 49 76 / 15%)`; dark: `0 18px 42px rgb(0 0 0 / 28%)`): Toast notifications only.
-- **Drawer Separation** (`-14px 0 36px rgb(23 37 58 / 16%)`; dark: `-16px 0 40px rgb(0 0 0 / 36%)`): The log drawer edge.
+- **Drawer Separation** (`-14px 0 36px rgb(23 37 58 / 16%)` on the right or `0 -14px 36px rgb(23 37 58 / 16%)` at the bottom; dark mode increases opacity): The log drawer edge.
 - **Toggle Thumb** (`0 2px 5px rgb(0 0 0 / 22%)`): The movable white switch thumb.
 
 **The Flat Workspace Rule.** Resting workspace surfaces use borders and tonal contrast; shadows are reserved for transient layers or a movable control part.
@@ -259,7 +291,7 @@ Borders are one pixel and cool-toned. Panels clip their internal row separators 
 
 ### Navigation
 
-The desktop sidebar uses 44px rows with 9px corners, muted labels, and a blue-wash active state. Settings is anchored at the bottom behind a full-width separator, while the operational destinations stay grouped below the brand. The sidebar collapses first to an icon rail and then to a persistent four-item bottom bar with both icons and labels. Hover uses only a quiet panel tint; selection uses the accent family and `aria-current`.
+The desktop sidebar uses 44px rows with 9px corners, muted labels, and a blue-wash active state. Settings is anchored at the bottom behind a full-width separator, while the operational destinations stay grouped below the brand. A localized, keyboard-accessible control in the window header toggles the sidebar between its full width and icon rail on desktop. Responsive collapse still takes precedence below 980px, and the sidebar then becomes a persistent four-item bottom bar with both icons and labels below 700px. Hover uses only a quiet panel tint; selection uses the accent family and `aria-current`.
 
 ### Project Panel
 
@@ -276,7 +308,7 @@ The toggle is a 42px by 24px pill with a 16px white thumb. Its off state is neut
 
 ### Log Drawer
 
-The drawer is the primary inspection surface: a panel header and toolbar above a full-height terminal navy viewport. Logs use pale monospaced text, preserve whitespace, and expose follow, clear, close, Escape, focus restoration, and mobile backdrop behavior.
+The drawer is the primary inspection surface: a panel header and toolbar above a full-height terminal navy viewport. Logs use pale monospaced text, preserve whitespace, and expose follow, clear, close, Escape, focus restoration, and mobile backdrop behavior. Opening the drawer follows the selected service by default; changing services replaces the previous stream, clearing affects only the visible buffer, and an empty stream shows a quiet waiting message. The viewport retains a bounded history so long-running local services do not grow the webview indefinitely.
 
 ### Loading, Empty, Error, and Toast States
 
