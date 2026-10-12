@@ -1,0 +1,593 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-09T15:48:00+02:00",
+  "title": "Design System: Dockermon",
+  "extensions": {
+    "colorMeta": {
+      "ink": {
+        "role": "neutral",
+        "displayName": "Deep Ink",
+        "canonical": "#152033",
+        "tonalRamp": [
+          "oklch(15% 0.040 260.9)",
+          "oklch(27% 0.040 260.9)",
+          "oklch(39% 0.040 260.9)",
+          "oklch(51% 0.040 260.9)",
+          "oklch(63% 0.040 260.9)",
+          "oklch(75% 0.040 260.9)",
+          "oklch(87% 0.040 260.9)",
+          "oklch(95% 0.040 260.9)"
+        ]
+      },
+      "accent": {
+        "role": "primary",
+        "displayName": "Operational Blue",
+        "canonical": "#0568d8",
+        "tonalRamp": [
+          "oklch(15% 0.190 257.3)",
+          "oklch(27% 0.190 257.3)",
+          "oklch(39% 0.190 257.3)",
+          "oklch(51% 0.190 257.3)",
+          "oklch(63% 0.190 257.3)",
+          "oklch(75% 0.190 257.3)",
+          "oklch(87% 0.190 257.3)",
+          "oklch(95% 0.190 257.3)"
+        ]
+      },
+      "accent-hover": {
+        "role": "primary",
+        "displayName": "Operational Blue Hover",
+        "canonical": "#0059bb",
+        "tonalRamp": [
+          "oklch(15% 0.171 257.0)",
+          "oklch(27% 0.171 257.0)",
+          "oklch(39% 0.171 257.0)",
+          "oklch(51% 0.171 257.0)",
+          "oklch(63% 0.171 257.0)",
+          "oklch(75% 0.171 257.0)",
+          "oklch(87% 0.171 257.0)",
+          "oklch(95% 0.171 257.0)"
+        ]
+      },
+      "accent-soft": {
+        "role": "primary",
+        "displayName": "Blue Selection Wash",
+        "canonical": "#e5f1ff",
+        "tonalRamp": [
+          "oklch(15% 0.023 252.2)",
+          "oklch(27% 0.023 252.2)",
+          "oklch(39% 0.023 252.2)",
+          "oklch(51% 0.023 252.2)",
+          "oklch(63% 0.023 252.2)",
+          "oklch(75% 0.023 252.2)",
+          "oklch(87% 0.023 252.2)",
+          "oklch(95% 0.023 252.2)"
+        ]
+      },
+      "accent-text": {
+        "role": "primary",
+        "displayName": "Blue Emphasis Text",
+        "canonical": "#046ccc",
+        "tonalRamp": [
+          "oklch(15% 0.170 254.2)",
+          "oklch(27% 0.170 254.2)",
+          "oklch(39% 0.170 254.2)",
+          "oklch(51% 0.170 254.2)",
+          "oklch(63% 0.170 254.2)",
+          "oklch(75% 0.170 254.2)",
+          "oklch(87% 0.170 254.2)",
+          "oklch(95% 0.170 254.2)"
+        ]
+      },
+      "app-background": {
+        "role": "neutral",
+        "displayName": "Cool Canvas",
+        "canonical": "#f4f7fb",
+        "tonalRamp": [
+          "oklch(15% 0.006 255.5)",
+          "oklch(27% 0.006 255.5)",
+          "oklch(39% 0.006 255.5)",
+          "oklch(51% 0.006 255.5)",
+          "oklch(63% 0.006 255.5)",
+          "oklch(75% 0.006 255.5)",
+          "oklch(87% 0.006 255.5)",
+          "oklch(95% 0.006 255.5)"
+        ]
+      },
+      "border": {
+        "role": "neutral",
+        "displayName": "Quiet Divider",
+        "canonical": "#dbe3ed",
+        "tonalRamp": [
+          "oklch(15% 0.016 253.9)",
+          "oklch(27% 0.016 253.9)",
+          "oklch(39% 0.016 253.9)",
+          "oklch(51% 0.016 253.9)",
+          "oklch(63% 0.016 253.9)",
+          "oklch(75% 0.016 253.9)",
+          "oklch(87% 0.016 253.9)",
+          "oklch(95% 0.016 253.9)"
+        ]
+      },
+      "border-strong": {
+        "role": "neutral",
+        "displayName": "Control Divider",
+        "canonical": "#c9d4e2",
+        "tonalRamp": [
+          "oklch(15% 0.023 254.4)",
+          "oklch(27% 0.023 254.4)",
+          "oklch(39% 0.023 254.4)",
+          "oklch(51% 0.023 254.4)",
+          "oklch(63% 0.023 254.4)",
+          "oklch(75% 0.023 254.4)",
+          "oklch(87% 0.023 254.4)",
+          "oklch(95% 0.023 254.4)"
+        ]
+      },
+      "control-border": {
+        "role": "neutral",
+        "displayName": "Control Outline",
+        "canonical": "#bdcad9",
+        "tonalRamp": [
+          "oklch(15% 0.025 251.9)",
+          "oklch(27% 0.025 251.9)",
+          "oklch(39% 0.025 251.9)",
+          "oklch(51% 0.025 251.9)",
+          "oklch(63% 0.025 251.9)",
+          "oklch(75% 0.025 251.9)",
+          "oklch(87% 0.025 251.9)",
+          "oklch(95% 0.025 251.9)"
+        ]
+      },
+      "control-muted": {
+        "role": "neutral",
+        "displayName": "Muted Control Fill",
+        "canonical": "#d7dfe9",
+        "tonalRamp": [
+          "oklch(15% 0.016 253.9)",
+          "oklch(27% 0.016 253.9)",
+          "oklch(39% 0.016 253.9)",
+          "oklch(51% 0.016 253.9)",
+          "oklch(63% 0.016 253.9)",
+          "oklch(75% 0.016 253.9)",
+          "oklch(87% 0.016 253.9)",
+          "oklch(95% 0.016 253.9)"
+        ]
+      },
+      "danger": {
+        "role": "tertiary",
+        "displayName": "Failure Red",
+        "canonical": "#cf2330",
+        "tonalRamp": [
+          "oklch(15% 0.204 24.1)",
+          "oklch(27% 0.204 24.1)",
+          "oklch(39% 0.204 24.1)",
+          "oklch(51% 0.204 24.1)",
+          "oklch(63% 0.204 24.1)",
+          "oklch(75% 0.204 24.1)",
+          "oklch(87% 0.204 24.1)",
+          "oklch(95% 0.204 24.1)"
+        ]
+      },
+      "danger-soft": {
+        "role": "tertiary",
+        "displayName": "Failure Wash",
+        "canonical": "#fff0f1",
+        "tonalRamp": [
+          "oklch(15% 0.016 12.8)",
+          "oklch(27% 0.016 12.8)",
+          "oklch(39% 0.016 12.8)",
+          "oklch(51% 0.016 12.8)",
+          "oklch(63% 0.016 12.8)",
+          "oklch(75% 0.016 12.8)",
+          "oklch(87% 0.016 12.8)",
+          "oklch(95% 0.016 12.8)"
+        ]
+      },
+      "focus-ring": {
+        "role": "primary",
+        "displayName": "Keyboard Focus Ring",
+        "canonical": "rgb(8 127 245 / 34%)",
+        "tonalRamp": [
+          "oklch(15% 0.199 255.3)",
+          "oklch(27% 0.199 255.3)",
+          "oklch(39% 0.199 255.3)",
+          "oklch(51% 0.199 255.3)",
+          "oklch(63% 0.199 255.3)",
+          "oklch(75% 0.199 255.3)",
+          "oklch(87% 0.199 255.3)",
+          "oklch(95% 0.199 255.3)"
+        ]
+      },
+      "header-surface": {
+        "role": "neutral",
+        "displayName": "Window Header",
+        "canonical": "#fbfcfe",
+        "tonalRamp": [
+          "oklch(15% 0.003 264.5)",
+          "oklch(27% 0.003 264.5)",
+          "oklch(39% 0.003 264.5)",
+          "oklch(51% 0.003 264.5)",
+          "oklch(63% 0.003 264.5)",
+          "oklch(75% 0.003 264.5)",
+          "oklch(87% 0.003 264.5)",
+          "oklch(95% 0.003 264.5)"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted Slate",
+        "canonical": "#647187",
+        "tonalRamp": [
+          "oklch(15% 0.038 260.9)",
+          "oklch(27% 0.038 260.9)",
+          "oklch(39% 0.038 260.9)",
+          "oklch(51% 0.038 260.9)",
+          "oklch(63% 0.038 260.9)",
+          "oklch(75% 0.038 260.9)",
+          "oklch(87% 0.038 260.9)",
+          "oklch(95% 0.038 260.9)"
+        ]
+      },
+      "muted-soft": {
+        "role": "neutral",
+        "displayName": "Quiet Slate",
+        "canonical": "#647187",
+        "tonalRamp": [
+          "oklch(15% 0.038 260.9)",
+          "oklch(27% 0.038 260.9)",
+          "oklch(39% 0.038 260.9)",
+          "oklch(51% 0.038 260.9)",
+          "oklch(63% 0.038 260.9)",
+          "oklch(75% 0.038 260.9)",
+          "oklch(87% 0.038 260.9)",
+          "oklch(95% 0.038 260.9)"
+        ]
+      },
+      "panel": {
+        "role": "neutral",
+        "displayName": "Panel White",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "oklch(15% 0.000 89.9)",
+          "oklch(27% 0.000 89.9)",
+          "oklch(39% 0.000 89.9)",
+          "oklch(51% 0.000 89.9)",
+          "oklch(63% 0.000 89.9)",
+          "oklch(75% 0.000 89.9)",
+          "oklch(87% 0.000 89.9)",
+          "oklch(95% 0.000 89.9)"
+        ]
+      },
+      "panel-hover": {
+        "role": "neutral",
+        "displayName": "Hover Surface",
+        "canonical": "#f7faff",
+        "tonalRamp": [
+          "oklch(15% 0.007 260.7)",
+          "oklch(27% 0.007 260.7)",
+          "oklch(39% 0.007 260.7)",
+          "oklch(51% 0.007 260.7)",
+          "oklch(63% 0.007 260.7)",
+          "oklch(75% 0.007 260.7)",
+          "oklch(87% 0.007 260.7)",
+          "oklch(95% 0.007 260.7)"
+        ]
+      },
+      "panel-selected": {
+        "role": "primary",
+        "displayName": "Selected Row",
+        "canonical": "#e7f2ff",
+        "tonalRamp": [
+          "oklch(15% 0.021 252.5)",
+          "oklch(27% 0.021 252.5)",
+          "oklch(39% 0.021 252.5)",
+          "oklch(51% 0.021 252.5)",
+          "oklch(63% 0.021 252.5)",
+          "oklch(75% 0.021 252.5)",
+          "oklch(87% 0.021 252.5)",
+          "oklch(95% 0.021 252.5)"
+        ]
+      },
+      "sidebar": {
+        "role": "neutral",
+        "displayName": "Sidebar Surface",
+        "canonical": "#f8fafc",
+        "tonalRamp": [
+          "oklch(15% 0.003 247.9)",
+          "oklch(27% 0.003 247.9)",
+          "oklch(39% 0.003 247.9)",
+          "oklch(51% 0.003 247.9)",
+          "oklch(63% 0.003 247.9)",
+          "oklch(75% 0.003 247.9)",
+          "oklch(87% 0.003 247.9)",
+          "oklch(95% 0.003 247.9)"
+        ]
+      },
+      "success": {
+        "role": "secondary",
+        "displayName": "Healthy Green",
+        "canonical": "#087f3a",
+        "tonalRamp": [
+          "oklch(15% 0.141 150.1)",
+          "oklch(27% 0.141 150.1)",
+          "oklch(39% 0.141 150.1)",
+          "oklch(51% 0.141 150.1)",
+          "oklch(63% 0.141 150.1)",
+          "oklch(75% 0.141 150.1)",
+          "oklch(87% 0.141 150.1)",
+          "oklch(95% 0.141 150.1)"
+        ]
+      },
+      "warning": {
+        "role": "tertiary",
+        "displayName": "Transition Amber",
+        "canonical": "#925600",
+        "tonalRamp": [
+          "oklch(15% 0.114 65.1)",
+          "oklch(27% 0.114 65.1)",
+          "oklch(39% 0.114 65.1)",
+          "oklch(51% 0.114 65.1)",
+          "oklch(63% 0.114 65.1)",
+          "oklch(75% 0.114 65.1)",
+          "oklch(87% 0.114 65.1)",
+          "oklch(95% 0.114 65.1)"
+        ]
+      },
+      "terminal": {
+        "role": "neutral",
+        "displayName": "Terminal Navy",
+        "canonical": "#101821",
+        "tonalRamp": [
+          "oklch(15% 0.022 251.8)",
+          "oklch(27% 0.022 251.8)",
+          "oklch(39% 0.022 251.8)",
+          "oklch(51% 0.022 251.8)",
+          "oklch(63% 0.022 251.8)",
+          "oklch(75% 0.022 251.8)",
+          "oklch(87% 0.022 251.8)",
+          "oklch(95% 0.022 251.8)"
+        ]
+      },
+      "terminal-text": {
+        "role": "neutral",
+        "displayName": "Terminal Text",
+        "canonical": "#dce6ef",
+        "tonalRamp": [
+          "oklch(15% 0.016 245.1)",
+          "oklch(27% 0.016 245.1)",
+          "oklch(39% 0.016 245.1)",
+          "oklch(51% 0.016 245.1)",
+          "oklch(63% 0.016 245.1)",
+          "oklch(75% 0.016 245.1)",
+          "oklch(87% 0.016 245.1)",
+          "oklch(95% 0.016 245.1)"
+        ]
+      },
+      "on-accent": {
+        "role": "neutral",
+        "displayName": "On Accent",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "oklch(15% 0.000 89.9)",
+          "oklch(27% 0.000 89.9)",
+          "oklch(39% 0.000 89.9)",
+          "oklch(51% 0.000 89.9)",
+          "oklch(63% 0.000 89.9)",
+          "oklch(75% 0.000 89.9)",
+          "oklch(87% 0.000 89.9)",
+          "oklch(95% 0.000 89.9)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Page titles and the strongest local hierarchy."
+      },
+      "title": { "displayName": "Title", "purpose": "Project names and container titles." },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Dense service rows, metrics, metadata, and support copy."
+      },
+      "label": { "displayName": "Label", "purpose": "Table headers and compact field labels." },
+      "button": { "displayName": "Button", "purpose": "Compact lifecycle and utility actions." },
+      "mono": { "displayName": "Machine Output", "purpose": "Port mappings and log output only." }
+    },
+    "shadows": [
+      {
+        "name": "floating-feedback",
+        "value": "0 18px 42px rgb(30 49 76 / 15%)",
+        "purpose": "Light-theme toast notification elevation."
+      },
+      {
+        "name": "floating-feedback-dark",
+        "value": "0 18px 42px rgb(0 0 0 / 28%)",
+        "purpose": "Dark-theme toast notification elevation."
+      },
+      {
+        "name": "drawer-separation",
+        "value": "-14px 0 36px rgb(23 37 58 / 16%)",
+        "purpose": "Light-theme separation at the log drawer edge."
+      },
+      {
+        "name": "drawer-separation-dark",
+        "value": "-16px 0 40px rgb(0 0 0 / 36%)",
+        "purpose": "Dark-theme separation at the log drawer edge."
+      },
+      {
+        "name": "toggle-thumb",
+        "value": "0 2px 5px rgb(0 0 0 / 22%)",
+        "purpose": "Physical separation for the movable toggle thumb."
+      }
+    ],
+    "motion": [
+      {
+        "name": "state-change",
+        "value": "150ms ease-out",
+        "purpose": "Default color, background, and border transitions."
+      },
+      {
+        "name": "control-move",
+        "value": "180ms cubic-bezier(0.22, 1, 0.36, 1)",
+        "purpose": "Toggle thumb and disclosure chevron movement."
+      },
+      {
+        "name": "drawer-entry",
+        "value": "200ms cubic-bezier(0.22, 1, 0.36, 1)",
+        "purpose": "Log drawer entrance from the right edge."
+      },
+      {
+        "name": "skeleton-sweep",
+        "value": "1.3s linear infinite",
+        "purpose": "Loading placeholder sweep; suppressed by reduced-motion preferences."
+      }
+    ],
+    "breakpoints": [
+      { "name": "mobile", "value": "700px" },
+      { "name": "compact-sidebar", "value": "980px" },
+      { "name": "drawer-reflow", "value": "1280px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Runs the routine positive action for the current project or state.",
+      "html": "<button class=\"ds-button-primary\" type=\"button\"><svg aria-hidden=\"true\" viewBox=\"0 0 24 24\"><path d=\"m9 6 8 6-8 6V6Z\"/></svg>Start selected</button>",
+      "css": ".ds-button-primary { display: inline-flex; min-height: 36px; align-items: center; justify-content: center; gap: 8px; padding: 0 13px; border: 0; border-radius: 8px; color: #fff; background: var(--accent, #0568d8); font: 650 0.78rem Inter, ui-sans-serif, system-ui, sans-serif; transition: background 150ms ease-out; } .ds-button-primary svg { width: 16px; height: 16px; fill: currentColor; } .ds-button-primary:hover { background: var(--accent-hover, #0059bb); } .ds-button-primary:focus-visible { outline: 3px solid var(--focus-ring, rgb(8 127 245 / 34%)); outline-offset: 2px; } .ds-button-primary:active { filter: brightness(0.94); }"
+    },
+    {
+      "name": "Danger Button",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "Signals a scoped stop action without visually equating it with removal.",
+      "html": "<button class=\"ds-button-danger\" type=\"button\"><svg aria-hidden=\"true\" viewBox=\"0 0 24 24\"><rect x=\"7\" y=\"7\" width=\"10\" height=\"10\" rx=\"1\"/></svg>Stop selected</button>",
+      "css": ".ds-button-danger { display: inline-flex; min-height: 36px; align-items: center; justify-content: center; gap: 8px; padding: 0 13px; border: 1px solid color-mix(in srgb, var(--danger, #cf2330) 48%, var(--border, #dbe3ed)); border-radius: 8px; color: var(--danger, #cf2330); background: var(--danger-soft, #fff0f1); font: 650 0.78rem Inter, ui-sans-serif, system-ui, sans-serif; transition: border-color 150ms ease-out, background 150ms ease-out; } .ds-button-danger svg { width: 15px; height: 15px; fill: currentColor; } .ds-button-danger:hover { border-color: var(--danger, #cf2330); } .ds-button-danger:focus-visible { outline: 3px solid var(--focus-ring, rgb(8 127 245 / 34%)); outline-offset: 2px; } .ds-button-danger:active { filter: brightness(0.97); }"
+    },
+    {
+      "name": "Icon Action",
+      "kind": "button",
+      "refersTo": "button-icon",
+      "description": "Compact service-row action with a bordered neutral resting state.",
+      "html": "<button class=\"ds-icon-action\" type=\"button\" aria-label=\"Restart service\"><svg aria-hidden=\"true\" viewBox=\"0 0 24 24\"><path d=\"M19.2 9A8 8 0 1 0 20 14M19.2 4.5V9h-4.5\"/></svg></button>",
+      "css": ".ds-icon-action { display: grid; width: 32px; height: 32px; place-items: center; border: 1px solid var(--border-strong, #c9d4e2); border-radius: 7px; color: var(--muted, #647187); background: var(--panel, #fff); transition: border-color 150ms ease-out, color 150ms ease-out, background 150ms ease-out; } .ds-icon-action svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; } .ds-icon-action:hover { border-color: var(--accent, #0568d8); color: var(--accent-text, #046ccc); background: var(--accent-soft, #e5f1ff); } .ds-icon-action:focus-visible { outline: 3px solid var(--focus-ring, rgb(8 127 245 / 34%)); outline-offset: 2px; } .ds-icon-action:active { transform: translateY(1px); }"
+    },
+    {
+      "name": "Active Navigation Item",
+      "kind": "nav",
+      "refersTo": "navigation-active",
+      "description": "Selected top-level destination for the sidebar or mobile bottom bar; Settings remains separated at the bottom on desktop.",
+      "html": "<button class=\"ds-navigation-active\" type=\"button\" aria-current=\"page\"><svg aria-hidden=\"true\" viewBox=\"0 0 24 24\"><path d=\"M3.5 6.75h6l2 2h9v9.75a1.75 1.75 0 0 1-1.75 1.75H5.25A1.75 1.75 0 0 1 3.5 18.5V6.75Z\"/></svg><span>Projects</span></button>",
+      "css": ".ds-navigation-active { display: inline-flex; min-height: 44px; align-items: center; gap: 13px; padding: 0 14px; border: 0; border-radius: 9px; color: var(--accent-text, #046ccc); background: var(--accent-soft, #e5f1ff); font: 560 1rem Inter, ui-sans-serif, system-ui, sans-serif; text-align: left; transition: color 150ms ease-out, background 150ms ease-out; } .ds-navigation-active svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; } .ds-navigation-active:hover { color: inherit; background: var(--panel-hover, #f7faff); } .ds-navigation-active:focus-visible { outline: 3px solid var(--focus-ring, rgb(8 127 245 / 34%)); outline-offset: 2px; }"
+    },
+    {
+      "name": "Project Panel",
+      "kind": "card",
+      "refersTo": "project-panel",
+      "description": "Expandable project-scope container with identity, active state, actions, and dense service rows.",
+      "html": "<section class=\"ds-project-panel\"><header><span class=\"ds-project-name\"><svg aria-hidden=\"true\" viewBox=\"0 0 24 24\"><path d=\"M3.5 6.75h6l2 2h9v9.75a1.75 1.75 0 0 1-1.75 1.75H5.25A1.75 1.75 0 0 1 3.5 18.5V6.75Z\"/></svg>Local shop</span><span class=\"ds-project-state\">Active</span></header><div class=\"ds-project-row\"><strong>web</strong><span class=\"ds-project-healthy\">● Running</span><span>1.8%</span><code>3000:3000</code></div></section>",
+      "css": ".ds-project-panel { overflow: hidden; border: 1px solid var(--border, #dbe3ed); border-radius: 12px; color: inherit; background: var(--panel, #fff); font-family: Inter, ui-sans-serif, system-ui, sans-serif; } .ds-project-panel header { display: flex; min-height: 58px; align-items: center; justify-content: space-between; gap: 16px; padding: 8px 14px; border-bottom: 1px solid var(--border, #dbe3ed); } .ds-project-name { display: inline-flex; align-items: center; gap: 10px; font-size: 0.98rem; font-weight: 630; } .ds-project-name svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; } .ds-project-state { color: var(--muted, #647187); font-size: 0.82rem; } .ds-project-row { display: grid; min-height: 44px; align-items: center; grid-template-columns: 1fr 1fr 70px 120px; gap: 12px; padding: 0 18px; color: var(--muted, #647187); font-size: 0.82rem; } .ds-project-row strong { color: inherit; font-weight: 630; } .ds-project-healthy { color: var(--success, #087f3a); font-weight: 550; } .ds-project-row code { font-family: 'DejaVu Sans Mono', ui-monospace, monospace; font-size: 0.75rem; }"
+    },
+    {
+      "name": "Active Toggle",
+      "kind": "input",
+      "refersTo": "toggle-on",
+      "description": "Marks whether a project participates in active-work monitoring.",
+      "html": "<label class=\"ds-toggle\"><input type=\"checkbox\" checked aria-label=\"Active project\"><span class=\"ds-toggle-track\"><span class=\"ds-toggle-thumb\"></span></span></label>",
+      "css": ".ds-toggle { display: inline-flex; cursor: pointer; } .ds-toggle input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); } .ds-toggle-track { display: flex; width: 42px; height: 24px; align-items: center; padding: 3px; border: 1px solid var(--control-border, #bdcad9); border-radius: 999px; background: var(--control-muted, #d7dfe9); transition: background 180ms ease-out, border-color 180ms ease-out; } .ds-toggle-thumb { width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 2px 5px rgb(0 0 0 / 22%); transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1); } .ds-toggle input:checked + .ds-toggle-track { border-color: var(--accent, #0568d8); background: var(--accent, #0568d8); } .ds-toggle input:checked + .ds-toggle-track .ds-toggle-thumb { transform: translateX(18px); } .ds-toggle input:focus-visible + .ds-toggle-track { outline: 3px solid var(--focus-ring, rgb(8 127 245 / 34%)); outline-offset: 3px; }"
+    },
+    {
+      "name": "Bulk Checkbox",
+      "kind": "input",
+      "refersTo": "checkbox-bulk",
+      "description": "Fixed-size service selection control with matching unchecked, checked, and mixed-state geometry.",
+      "html": "<input class=\"ds-bulk-checkbox\" type=\"checkbox\" checked aria-label=\"Select service\">",
+      "css": ".ds-bulk-checkbox { display: grid; appearance: none; width: 18px; height: 18px; place-content: center; margin: 0; border: 1.5px solid var(--control-border, #bdcad9); border-radius: 4px; background: var(--panel, #fff); transition: background 120ms ease-out, border-color 120ms ease-out; } .ds-bulk-checkbox:hover { border-color: var(--accent, #0568d8); } .ds-bulk-checkbox:checked { border-color: var(--accent, #0568d8); background: var(--accent, #0568d8); } .ds-bulk-checkbox:checked::before { width: 5px; height: 9px; border-right: 2px solid #fff; border-bottom: 2px solid #fff; content: ''; transform: translateY(-1px) rotate(45deg); } .ds-bulk-checkbox:focus-visible { outline: 3px solid var(--focus-ring, rgb(8 127 245 / 34%)); outline-offset: 2px; }"
+    },
+    {
+      "name": "Select Field",
+      "kind": "input",
+      "refersTo": "select-field",
+      "description": "Compact preference field on the settings surface.",
+      "html": "<label class=\"ds-select-field\"><span>Language</span><select><option>English</option><option>Polski</option></select></label>",
+      "css": ".ds-select-field { display: flex; min-height: 78px; align-items: center; justify-content: space-between; gap: 20px; color: inherit; font: 650 1rem Inter, ui-sans-serif, system-ui, sans-serif; } .ds-select-field select { min-width: 150px; min-height: 40px; padding: 0 36px 0 12px; border: 1px solid var(--border-strong, #c9d4e2); border-radius: 8px; color: inherit; background: var(--panel, #fff); font: 400 0.82rem Inter, ui-sans-serif, system-ui, sans-serif; } .ds-select-field select:hover { border-color: var(--control-border, #bdcad9); } .ds-select-field select:focus-visible { outline: 3px solid var(--focus-ring, rgb(8 127 245 / 34%)); outline-offset: 2px; }"
+    },
+    {
+      "name": "Healthy Service Status",
+      "kind": "custom",
+      "refersTo": "project-panel",
+      "description": "Pairs the semantic status color with a readable state label.",
+      "html": "<span class=\"ds-service-status\"><span aria-hidden=\"true\" class=\"ds-status-dot\"></span><span>Running</span></span>",
+      "css": ".ds-service-status { display: inline-flex; align-items: center; gap: 9px; color: var(--success, #087f3a); font: 550 0.82rem Inter, ui-sans-serif, system-ui, sans-serif; } .ds-status-dot { width: 9px; height: 9px; flex: none; border-radius: 50%; background: var(--success, #087f3a); }"
+    },
+    {
+      "name": "Log Viewport",
+      "kind": "custom",
+      "refersTo": "project-panel",
+      "description": "High-contrast machine-output surface inside the inspection drawer.",
+      "html": "<pre class=\"ds-log-viewport\" tabindex=\"0\">[12:36:14] [INFO] Starting api service...\n[12:36:15] [INFO] Connecting to database...\n[12:36:16] [INFO] Database connection ready</pre>",
+      "css": ".ds-log-viewport { min-height: 220px; overflow: auto; margin: 0; padding: 16px; border: 0; border-radius: 0; color: var(--terminal-text, #dce6ef); background: var(--terminal, #101821); font: 400 0.76rem/1.62 'DejaVu Sans Mono', ui-monospace, monospace; tab-size: 2; white-space: pre; } .ds-log-viewport:hover { color: var(--terminal-text, #dce6ef); } .ds-log-viewport:focus-visible { outline: 3px solid var(--focus-ring, rgb(8 127 245 / 34%)); outline-offset: -3px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Local Control Room",
+    "overview": "Dockermon is a calm, compact operations console for a developer's own machine. The interface leads with operational state, keeps routine actions close to the affected service, and uses restrained blue emphasis so running, warning, and failure colors remain immediately meaningful.\n\nIts visual character is native-feeling rather than branded spectacle: crisp system typography, pale tonal separation, compact controls, fine borders, and a persistent workspace frame. Light and dark themes preserve the same information hierarchy. The result should feel at home on a Linux desktop without reproducing Docker Desktop's visual identity.",
+    "keyCharacteristics": [
+      "Dense, scan-first operational rows with stable columns and tabular metrics.",
+      "A single blue interaction accent, reserved semantic state colors, and quiet neutral surfaces.",
+      "Flat panels separated by borders; elevation appears only for temporary overlays.",
+      "Desktop sidebar navigation that becomes a labeled bottom bar on narrow screens.",
+      "Monospaced ports and logs inside an otherwise system-sans interface."
+    ],
+    "rules": [
+      {
+        "name": "The State Color Rule",
+        "body": "Green, amber, and red communicate runtime state or operation consequence; never use them as decorative accents.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Accent Rule",
+        "body": "Blue owns interaction and selection. New screens should not introduce a competing brand accent.",
+        "section": "colors"
+      },
+      {
+        "name": "The Monospace Evidence Rule",
+        "body": "Use monospace only for machine output, port mappings, and similarly inspectable values—not for navigation or prose.",
+        "section": "typography"
+      },
+      {
+        "name": "The Scan Before Action Rule",
+        "body": "Keep names, state, CPU, memory, ports, and row actions in a consistent reading order; responsive layouts may reflow them but must not drop them.",
+        "section": "layout"
+      },
+      {
+        "name": "The Flat Workspace Rule",
+        "body": "Resting workspace surfaces use borders and tonal contrast; shadows are reserved for transient layers or a movable control part.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Radius Hierarchy Rule",
+        "body": "Containers are rounder than their controls, and controls are rounder than dense row geometry.",
+        "section": "shapes"
+      }
+    ],
+    "dos": [
+      "Do lead with current Docker state before presenting lifecycle actions.",
+      "Do preserve the stable name → state → CPU → memory → ports → actions reading sequence across breakpoints.",
+      "Do pair semantic status color with text or an icon rather than relying on color alone.",
+      "Do keep both themes semantically equivalent and use the existing CSS custom-property roles.",
+      "Do use restrained 140–200ms transitions and honor reduced-motion preferences.",
+      "Do keep routine project actions visibly scoped to the current panel."
+    ],
+    "donts": [
+      "Don't use green, amber, or red for decoration or navigation emphasis.",
+      "Don't add resting card shadows, gradients, glass effects, or oversized floating surfaces to the workspace.",
+      "Don't hide metrics or service actions when adapting the table for mobile.",
+      "Don't turn every control into a pill; reserve fully rounded shapes for switches, dots, and scrollbar thumbs.",
+      "Don't expand the type palette beyond system sans and functional monospace without replacing the visual system deliberately.",
+      "Don't imitate Docker Desktop's visual identity; Dockermon should remain a quiet Linux-native utility."
+    ]
+  }
+}

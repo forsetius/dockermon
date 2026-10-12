@@ -1,0 +1,48 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Dockermon",
+  "version": "0.1.0",
+  "identifier": "pl.forseti.dockermon",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "beforeBuildCommand": "pnpm build",
+    "devUrl": "http://127.0.0.1:1420",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "enableGTKAppId": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "Dockermon",
+        "width": 1180,
+        "height": 760,
+        "minWidth": 720,
+        "minHeight": 560,
+        "backgroundColor": "#141517",
+        "visible": false,
+        "decorations": false,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost; img-src 'self' asset: http://asset.localhost; style-src 'self' 'unsafe-inline'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "copyright": "Copyright 2026 Marcin 'Forseti' Paździora",
+    "targets": ["deb"],
+    "icon": ["icons/icon.png", "icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png"],
+    "licenseFile": "../LICENSE",
+    "linux": {
+      "deb": {
+        "files": {
+          "/usr/share/doc/dockermon/LICENSE": "../LICENSE",
+          "/usr/share/doc/dockermon/NOTICE": "../NOTICE",
+          "/usr/share/doc/dockermon/third-party/JetBrainsMono-OFL-1.1.txt": "../THIRD_PARTY_LICENSES/JetBrainsMono-OFL-1.1.txt"
+        }
+      }
+    }
+  }
+}
