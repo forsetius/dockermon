@@ -5,7 +5,15 @@ export type ThemePreference = 'system' | 'light' | 'dark';
 export type ConnectionStatus = 'connected' | 'connecting' | 'disconnected' | 'permission-denied';
 
 export type ServiceStatus =
-  'not-created' | 'stopped' | 'starting' | 'running' | 'healthy' | 'unhealthy' | 'paused' | 'error';
+  | 'unknown'
+  | 'not-created'
+  | 'stopped'
+  | 'starting'
+  | 'running'
+  | 'healthy'
+  | 'unhealthy'
+  | 'paused'
+  | 'error';
 
 export type ServiceAction = 'start' | 'stop' | 'restart' | 'resume';
 

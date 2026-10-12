@@ -97,9 +97,38 @@ jobs:
           --locked
           --all-targets
 
+  docker-smoke:
+    name: Docker integration smoke tests
+    needs: rust
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Install native dependencies
+        run: >-
+          sudo apt-get update && sudo apt-get install -y
+          pkg-config
+          libdbus-1-dev
+          libwebkit2gtk-4.1-dev
+          libayatana-appindicator3-dev
+          librsvg2-dev
+          patchelf
+          libssl-dev
+          libxdo-dev
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+
+      - name: Run isolated Docker smoke tests
+        run: ./scripts/run-docker-smoke.sh
+
   build-deb:
     name: Build Debian package
-    needs: [frontend, rust]
+    needs: [frontend, rust, docker-smoke]
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:

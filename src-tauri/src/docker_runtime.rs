@@ -154,9 +154,7 @@ impl DockerRuntimeSupervisor {
                 *self.client.lock().await = None;
                 let runtime_error = runtime_error(&error);
                 let mut state = self.state.write().await;
-                state.snapshot.connection = connection_status(&error);
-                state.snapshot.capabilities.lifecycle_actions = false;
-                state.snapshot.capabilities.logs = false;
+                mark_snapshot_disconnected(&mut state.snapshot, connection_status(&error));
                 Err(runtime_error)
             }
         }
@@ -312,9 +310,7 @@ impl DockerRuntimeSupervisor {
     async fn record_connection_error(&self, error: &DockerError) {
         *self.client.lock().await = None;
         let mut state = self.state.write().await;
-        state.snapshot.connection = connection_status(error);
-        state.snapshot.capabilities.lifecycle_actions = false;
-        state.snapshot.capabilities.logs = false;
+        mark_snapshot_disconnected(&mut state.snapshot, connection_status(error));
     }
 
     async fn execute_operation(
@@ -1730,6 +1726,22 @@ fn connection_status(error: &DockerError) -> ConnectionStatus {
     }
 }
 
+fn mark_snapshot_disconnected(snapshot: &mut ApplicationSnapshot, connection: ConnectionStatus) {
+    snapshot.connection = connection;
+    snapshot.capabilities.lifecycle_actions = false;
+    snapshot.capabilities.logs = false;
+    for service in snapshot
+        .projects
+        .iter_mut()
+        .flat_map(|project| project.services.iter_mut())
+        .chain(snapshot.standalone_containers.iter_mut())
+    {
+        service.status = ServiceStatus::Unknown;
+        service.cpu_percent = None;
+        service.memory_bytes = None;
+    }
+}
+
 fn runtime_error(error: &DockerError) -> RuntimeError {
     match connection_status(error) {
         ConnectionStatus::PermissionDenied => RuntimeError::new("DOCKER_PERMISSION_DENIED", false),
@@ -1793,6 +1805,97 @@ mod tests {
     use bollard::models::{
         ContainerCpuStats, ContainerCpuUsage, ContainerMemoryStats, ContainerSummaryStateEnum,
     };
+    use std::{
+        env,
+        ffi::OsStr,
+        process::Command as StandardCommand,
+        sync::atomic::{AtomicBool, Ordering},
+    };
+
+    fn assert_isolated_smoke_engine() {
+        let expected_host = env::var("DOCKERMON_SMOKE_DOCKER_HOST")
+            .expect("the Docker smoke runner should provide its isolated Engine address");
+        let actual_host =
+            env::var("DOCKER_HOST").expect("the Docker smoke runner should set DOCKER_HOST");
+
+        assert_eq!(actual_host, expected_host);
+        assert!(
+            actual_host.starts_with("unix:///tmp/dockermon-smoke."),
+            "smoke tests must never target the user's Docker Engine"
+        );
+    }
+
+    fn run_smoke_docker<I, S>(arguments: I) -> String
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<OsStr>,
+    {
+        let output = StandardCommand::new("docker")
+            .args(arguments)
+            .output()
+            .expect("the Docker CLI should be available for smoke fixtures");
+        assert!(
+            output.status.success(),
+            "Docker smoke command failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8(output.stdout).expect("Docker smoke output should be UTF-8")
+    }
+
+    fn smoke_compose_file() -> String {
+        env::var("DOCKERMON_SMOKE_COMPOSE_FILE")
+            .expect("the Docker smoke runner should provide the Compose fixture path")
+    }
+
+    fn start_smoke_worker(project: &str) {
+        let compose_file = smoke_compose_file();
+        run_smoke_docker([
+            "compose",
+            "-f",
+            compose_file.as_str(),
+            "-p",
+            project,
+            "up",
+            "-d",
+            "worker",
+        ]);
+    }
+
+    fn smoke_container_names(project: &str, service: Option<&str>) -> Vec<String> {
+        let project_filter = format!("label={COMPOSE_PROJECT_LABEL}={project}");
+        let service_filter =
+            service.map(|service| format!("label={COMPOSE_SERVICE_LABEL}={service}"));
+        let mut arguments = vec!["ps", "--all", "--filter", project_filter.as_str()];
+        if let Some(service_filter) = service_filter.as_deref() {
+            arguments.extend(["--filter", service_filter]);
+        }
+        arguments.extend(["--format", "{{.Names}}"]);
+
+        let mut names = run_smoke_docker(arguments)
+            .lines()
+            .map(str::to_owned)
+            .collect::<Vec<_>>();
+        names.sort();
+        names
+    }
+
+    fn all_smoke_container_names() -> Vec<String> {
+        let mut names = run_smoke_docker(["ps", "--all", "--format", "{{.Names}}"])
+            .lines()
+            .map(str::to_owned)
+            .collect::<Vec<_>>();
+        names.sort();
+        names
+    }
+
+    fn running_smoke_container_names() -> Vec<String> {
+        let mut names = run_smoke_docker(["ps", "--format", "{{.Names}}"])
+            .lines()
+            .map(str::to_owned)
+            .collect::<Vec<_>>();
+        names.sort();
+        names
+    }
 
     fn container(
         id: &str,
@@ -1948,6 +2051,66 @@ mod tests {
             connection_status(&disconnected_error),
             ConnectionStatus::Disconnected
         );
+    }
+
+    #[test]
+    fn connection_loss_invalidates_ready_service_states() {
+        let containers = vec![
+            container(
+                "compose-web",
+                "shop-web-1",
+                "running",
+                Some(("shop", "web")),
+                Vec::new(),
+            ),
+            container(
+                "standalone-api",
+                "standalone-api",
+                "running",
+                None,
+                Vec::new(),
+            ),
+        ];
+        let resources = HashMap::from([
+            (
+                "compose-web".to_owned(),
+                ResourceSample {
+                    cpu_percent: Some(1.5),
+                    memory_bytes: Some(256),
+                },
+            ),
+            (
+                "standalone-api".to_owned(),
+                ResourceSample {
+                    cpu_percent: Some(2.5),
+                    memory_bytes: Some(512),
+                },
+            ),
+        ]);
+        let mut snapshot = build_snapshot(containers, Some(&resources), &empty_snapshot());
+
+        assert!(snapshot.projects[0].services[0].status.is_ready());
+        assert!(snapshot.standalone_containers[0].status.is_ready());
+        assert_eq!(snapshot.projects[0].services[0].cpu_percent, Some(1.5));
+        assert_eq!(snapshot.standalone_containers[0].memory_bytes, Some(512));
+
+        mark_snapshot_disconnected(&mut snapshot, ConnectionStatus::Disconnected);
+
+        assert_eq!(snapshot.connection, ConnectionStatus::Disconnected);
+        assert!(!snapshot.capabilities.lifecycle_actions);
+        assert!(!snapshot.capabilities.logs);
+        assert_eq!(
+            snapshot.projects[0].services[0].status,
+            ServiceStatus::Unknown
+        );
+        assert_eq!(
+            snapshot.standalone_containers[0].status,
+            ServiceStatus::Unknown
+        );
+        assert_eq!(snapshot.projects[0].services[0].cpu_percent, None);
+        assert_eq!(snapshot.projects[0].services[0].memory_bytes, None);
+        assert_eq!(snapshot.standalone_containers[0].cpu_percent, None);
+        assert_eq!(snapshot.standalone_containers[0].memory_bytes, None);
     }
 
     #[test]
@@ -2191,6 +2354,110 @@ mod tests {
         assert_eq!(partial.sequence, 2);
     }
 
+    #[tokio::test]
+    #[ignore = "run through scripts/run-docker-smoke.sh against its isolated Docker Engine"]
+    async fn stops_all_containers_in_an_isolated_engine_and_reports_partial_failure() {
+        assert_isolated_smoke_engine();
+        let supervisor = DockerRuntimeSupervisor::new();
+        let initial = supervisor
+            .synchronize(false)
+            .await
+            .expect("the known smoke fixtures should be discoverable");
+
+        assert!(
+            initial
+                .projects
+                .iter()
+                .any(|project| project.name == "dockermon-smoke-known-a")
+        );
+        assert!(
+            initial
+                .projects
+                .iter()
+                .any(|project| project.name == "dockermon-smoke-known-b")
+        );
+        assert!(
+            initial
+                .projects
+                .iter()
+                .all(|project| project.name != "dockermon-smoke-unknown")
+        );
+        assert!(
+            initial
+                .standalone_containers
+                .iter()
+                .any(|container| container.name == "dockermon-smoke-standalone")
+        );
+
+        start_smoke_worker("dockermon-smoke-unknown");
+        let expected_containers = all_smoke_container_names();
+        assert_eq!(expected_containers.len(), 4);
+
+        let stopped = supervisor
+            .execute(RuntimeOperation::StopAll)
+            .await
+            .expect("global stop should succeed in the isolated Engine");
+        let report = stopped
+            .global_stop_report
+            .expect("global stop should publish a result");
+
+        assert_eq!((report.stopped, report.total), (4, 4));
+        assert!(report.failures.is_empty());
+        assert!(running_smoke_container_names().is_empty());
+        assert_eq!(all_smoke_container_names(), expected_containers);
+        for project in [
+            "dockermon-smoke-known-a",
+            "dockermon-smoke-known-b",
+            "dockermon-smoke-unknown",
+        ] {
+            let network = format!("{project}_default");
+            let volume = format!("{project}_state");
+            run_smoke_docker(["network", "inspect", network.as_str()]);
+            run_smoke_docker(["volume", "inspect", volume.as_str()]);
+        }
+
+        for container_name in &expected_containers {
+            run_smoke_docker(["start", container_name.as_str()]);
+        }
+        run_smoke_docker(["pause", "dockermon-smoke-standalone"]);
+
+        let failure_target = smoke_container_names("dockermon-smoke-unknown", Some("worker"))
+            .into_iter()
+            .next()
+            .expect("the unknown project should have one worker");
+        let failure_triggered = Arc::new(AtomicBool::new(false));
+        let publisher_trigger = failure_triggered.clone();
+        let publisher_target = failure_target.clone();
+        *supervisor
+            .publisher
+            .write()
+            .expect("snapshot publisher lock should not be poisoned") =
+            Some(Arc::new(move |snapshot, _| {
+                let inventory_ready = snapshot
+                    .global_stop_progress
+                    .as_ref()
+                    .is_some_and(|progress| progress.total > 0);
+                if inventory_ready && !publisher_trigger.swap(true, Ordering::SeqCst) {
+                    run_smoke_docker(["rm", "--force", publisher_target.as_str()]);
+                }
+            }));
+
+        let partially_stopped = supervisor
+            .execute(RuntimeOperation::StopAll)
+            .await
+            .expect("partial global stop should still return its report");
+        let partial_report = partially_stopped
+            .global_stop_report
+            .expect("partial global stop should publish a result");
+
+        assert!(failure_triggered.load(Ordering::SeqCst));
+        assert_eq!((partial_report.stopped, partial_report.total), (3, 4));
+        assert_eq!(partial_report.failures.len(), 1);
+        assert_eq!(partial_report.failures[0].container_name, failure_target);
+        assert_eq!(partial_report.failures[0].code, "CONTAINER_STOP_FAILED");
+        assert!(running_smoke_container_names().is_empty());
+    }
+
     #[test]
     fn resolves_every_container_for_a_compose_service_and_one_standalone_container() {
         let containers = vec![
@@ -2290,8 +2557,9 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "requires the dockermon-smoke-log-a and dockermon-smoke-log-b Docker fixtures"]
+    #[ignore = "run through scripts/run-docker-smoke.sh against its isolated Docker Engine"]
     async fn streams_and_merges_logs_from_a_live_compose_service() {
+        assert_isolated_smoke_engine();
         let supervisor = DockerRuntimeSupervisor::new();
         supervisor
             .synchronize(false)
@@ -2312,16 +2580,15 @@ mod tests {
             .expect("log subscription should start");
         assert!(initial.lines.len() <= INITIAL_LOG_LINE_LIMIT);
         assert!(initial.lines.iter().all(|line| !line.contains('\u{1b}')));
+        let expected_containers = smoke_container_names("dockermon-smoke", Some("logger"));
+        assert_eq!(expected_containers.len(), 2);
 
-        let streamed_lines = tokio::time::timeout(Duration::from_secs(5), async {
+        let streamed_lines = tokio::time::timeout(Duration::from_secs(15), async {
             let mut lines = Vec::new();
-            while !lines
-                .iter()
-                .any(|line: &String| line.starts_with("[dockermon-smoke-log-a]"))
-                || !lines
-                    .iter()
-                    .any(|line| line.starts_with("[dockermon-smoke-log-b]"))
-            {
+            while expected_containers.iter().any(|container_name| {
+                let prefix = format!("[{container_name}]");
+                !lines.iter().any(|line: &String| line.starts_with(&prefix))
+            }) {
                 let batch = receiver
                     .recv()
                     .await

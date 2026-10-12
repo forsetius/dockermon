@@ -31,7 +31,7 @@
       <img alt="" class="brand-mark-light" draggable="false" src={dockermonMarkLight} />
       <img alt="" class="brand-mark-dark" draggable="false" src={dockermonMarkDark} />
     </span>
-    <span>Dockermon</span>
+    <span class="brand-label">Dockermon</span>
   </div>
 
   <nav aria-label="Dockermon">

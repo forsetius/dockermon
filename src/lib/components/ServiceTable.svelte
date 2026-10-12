@@ -39,6 +39,7 @@
     starting: 'status.starting',
     stopped: 'status.stopped',
     unhealthy: 'status.unhealthy',
+    unknown: 'status.unknown',
   };
 
   const formatCpu = (value: number | null): string =>

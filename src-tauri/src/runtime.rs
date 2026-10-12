@@ -57,6 +57,7 @@ pub enum ConnectionStatus {
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum ServiceStatus {
+    Unknown,
     NotCreated,
     Stopped,
     Starting,

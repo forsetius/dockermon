@@ -42,6 +42,17 @@ pnpm tauri dev
 
 Run the frontend without the desktop shell with `pnpm dev`.
 
+Run the destructive Docker integration scenarios only through the isolated smoke-test runner:
+
+```bash
+pnpm test:docker-smoke
+```
+
+The runner starts a disposable Docker-in-Docker Engine, points both Bollard and Docker Compose at
+its private Unix socket, and stores Dockermon configuration in a temporary XDG directory. The
+fixtures use only names prefixed with `dockermon-smoke`; the test never stops or removes resources
+from the user's Docker Engine.
+
 The browser build uses the same deterministic test data automatically. Append `?scenario=loading`,
 `?scenario=empty`, or `?scenario=error` to inspect non-happy-path states.
 

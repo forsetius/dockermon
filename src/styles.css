@@ -348,7 +348,12 @@ input:disabled {
   padding: 0;
 }
 
-.app-shell.sidebar-collapsed .brand > span,
+.app-shell.sidebar-collapsed .brand-mark {
+  width: 40px;
+  height: 40px;
+}
+
+.app-shell.sidebar-collapsed .brand-label,
 .app-shell.sidebar-collapsed .sidebar nav button span {
   display: none;
 }
@@ -452,6 +457,10 @@ input:disabled {
 .status-dot.unhealthy,
 .status-dot.not-created {
   background: var(--danger);
+}
+
+.status-dot.unknown {
+  background: var(--muted);
 }
 
 .window-controls {
@@ -1677,7 +1686,12 @@ input:disabled {
     padding: 0;
   }
 
-  .brand > span,
+  .brand-mark {
+    width: 40px;
+    height: 40px;
+  }
+
+  .brand-label,
   .sidebar nav button span {
     display: none;
   }

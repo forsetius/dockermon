@@ -1,6 +1,6 @@
 {
   "name": "dockermon",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A focused local Docker project monitor for Linux",
   "author": {
     "name": "Marcin 'Forseti' Paździora",
@@ -18,6 +18,7 @@
     "lint": "eslint .",
     "format": "prettier --check .",
     "test": "vitest run",
+    "test:docker-smoke": "./scripts/run-docker-smoke.sh",
     "test:watch": "vitest",
     "quality": "pnpm format && pnpm lint && pnpm check && pnpm test",
     "tauri": "tauri"
