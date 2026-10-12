@@ -3,8 +3,8 @@
 Dockermon is a focused desktop monitor for local Docker development projects on Linux,
 especially Zorin OS.
 
-The desktop application monitors and controls the local Docker Engine through a production 
-runtime. The browser build continues to use the deterministic test runtime so the complete 
+The desktop application monitors and controls the local Docker Engine through a production
+runtime. The browser build continues to use the deterministic test runtime so the complete
 interface can be developed without changing local Docker resources.
 
 ## Prerequisites on Zorin OS 18
