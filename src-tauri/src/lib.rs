@@ -81,6 +81,11 @@ where
 }
 
 #[cfg(all(debug_assertions, target_os = "linux"))]
+fn development_identifier(release_identifier: &str) -> String {
+    format!("{release_identifier}.dev")
+}
+
+#[cfg(all(debug_assertions, target_os = "linux"))]
 fn development_desktop_entry_path(identifier: &str) -> Result<std::path::PathBuf, std::io::Error> {
     let data_home = std::env::var_os("XDG_DATA_HOME")
         .map(std::path::PathBuf::from)
@@ -386,6 +391,13 @@ pub(crate) fn show_main_window<R: Runtime>(app: &AppHandle<R>) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let context = tauri::generate_context!();
+    #[cfg(all(debug_assertions, target_os = "linux"))]
+    let context = {
+        let mut context = context;
+        let identifier = development_identifier(&context.config().identifier);
+        context.config_mut().identifier = identifier;
+        context
+    };
     let start_hidden = arguments_request_hidden_start(std::env::args_os());
     #[cfg(all(debug_assertions, target_os = "linux"))]
     let development_desktop_entry =
@@ -507,7 +519,9 @@ mod tests {
         arguments_request_hidden_start, autostart_entry_with_try_exec, autostart_registration,
     };
     #[cfg(all(debug_assertions, target_os = "linux"))]
-    use super::{development_desktop_entry_contents, development_desktop_entry_path};
+    use super::{
+        development_desktop_entry_contents, development_desktop_entry_path, development_identifier,
+    };
 
     #[test]
     fn generated_context_contains_the_linux_window_identity() {
@@ -547,21 +561,23 @@ mod tests {
     #[test]
     fn development_desktop_entry_matches_the_gtk_application_identifier() {
         let context: tauri::Context<tauri::Wry> = tauri::generate_context!();
-        let identifier = &context.config().identifier;
-        let path = development_desktop_entry_path(identifier)
+        let release_identifier = &context.config().identifier;
+        let identifier = development_identifier(release_identifier);
+        let path = development_desktop_entry_path(&identifier)
             .expect("a desktop entry path should be available in the test environment");
         let contents = development_desktop_entry_contents(
-            identifier,
+            &identifier,
             std::path::Path::new("/tmp/dockermon executable"),
             std::path::Path::new("/tmp/dockermon-icon.png"),
         );
 
+        assert_eq!(identifier, "pl.forseti.dockermon.dev");
         assert_eq!(
             path.file_name().and_then(|name| name.to_str()),
-            Some("pl.forseti.dockermon.desktop")
+            Some("pl.forseti.dockermon.dev.desktop")
         );
         assert!(contents.contains("Exec=\"/tmp/dockermon executable\""));
         assert!(contents.contains("Icon=/tmp/dockermon-icon.png"));
-        assert!(contents.contains("StartupWMClass=pl.forseti.dockermon"));
+        assert!(contents.contains("StartupWMClass=pl.forseti.dockermon.dev"));
     }
 }

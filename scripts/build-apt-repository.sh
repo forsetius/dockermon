@@ -14,6 +14,7 @@ readonly repository_architecture="amd64"
 readonly repository_component="main"
 readonly repository_origin="Dockermon"
 readonly repository_suite="stable"
+readonly dep11_origin="${package_name}-${repository_suite}-${repository_component}"
 readonly repository_url="${APT_REPOSITORY_URL:-https://apt.forseti.pl}"
 readonly compose_binary="${APPSTREAM_COMPOSE_BINARY:-/usr/libexec/appstreamcli-compose}"
 
@@ -111,13 +112,30 @@ fi
 
 appstreamcli convert --format=yaml "${composed_catalog}" "${dep11_metadata}"
 
+if grep -q '^Origin:' "${dep11_metadata}"; then
+  if ! grep -Fxq "Origin: ${dep11_origin}" "${dep11_metadata}"; then
+    printf 'Generated DEP-11 metadata contains an unexpected Origin field.\n' >&2
+    exit 1
+  fi
+else
+  sed -i "/^Version:/a Origin: ${dep11_origin}" "${dep11_metadata}"
+fi
+
+readonly dep11_header="$(
+  awk 'NR == 1 { next } /^---$/ { exit } { print }' "${dep11_metadata}"
+)"
+
+if ! grep -Fxq "Origin: ${dep11_origin}" <<< "${dep11_header}"; then
+  printf 'Generated DEP-11 metadata header is missing its origin.\n' >&2
+  exit 1
+fi
+
 readonly required_dep11_entries=(
   "Package: ${package_name}"
   'ProjectLicense: LicenseRef-Apache-2.0-with-Commons-Clause-1.0'
   'bugtracker: https://github.com/forsetius/dockermon/issues'
   'help: https://github.com/forsetius/dockermon/blob/master/USER_GUIDE.md'
   "version: ${package_version}"
-  'First public release of Dockermon.'
 )
 
 for required_entry in "${required_dep11_entries[@]}"; do

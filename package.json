@@ -1,6 +1,6 @@
 {
   "name": "dockermon",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "A focused local Docker project monitor for Linux",
   "author": {
     "name": "Marcin 'Forseti' Paździora",

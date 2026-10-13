@@ -94,15 +94,15 @@ can move to another host later without changing users' APT configuration.
 ## Publishing a release
 
 The release workflow accepts tags that exactly match the version in `package.json`, for example
-`v0.1.3` for package version `0.1.3`.
+`v0.1.4` for package version `0.1.4`.
 
 After the intended commit is merged into `master` and CI succeeds:
 
 ```bash
 git switch master
 git pull --ff-only
-git tag -a v0.1.3 -m "Dockermon 0.1.3"
-git push origin v0.1.3
+git tag -a v0.1.4 -m "Dockermon 0.1.4"
+git push origin v0.1.4
 ```
 
 The workflow then:
@@ -128,7 +128,7 @@ The test needs `appstream-compose`, `apt-utils`, `gnupg`, and `xz-utils`:
 ```bash
 sudo apt install appstream-compose apt-utils gnupg xz-utils
 ./scripts/test-apt-repository.sh \
-  src-tauri/target/release/bundle/deb/Dockermon_0.1.3_amd64.deb
+  src-tauri/target/release/bundle/deb/Dockermon_0.1.4_amd64.deb
 ```
 
 ## User installation
