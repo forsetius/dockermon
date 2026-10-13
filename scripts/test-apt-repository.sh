@@ -87,6 +87,7 @@ Architectures: amd64
 Signed-By: ${generated_repository}/dockermon-archive-keyring.gpg
 EOF
 
+# Hosted runners may disable DEP-11 globally, so the test defines the target it verifies.
 readonly apt_options=(
   -o "APT::Sandbox::User=$(id -un)"
   -o 'Debug::NoLocking=true'
@@ -96,6 +97,12 @@ readonly apt_options=(
   -o 'Dir::State::status=/var/lib/dpkg/status'
   -o "Dir::Cache=${apt_root}/cache"
   -o "Dir::Cache::archives=${apt_archives}"
+  -o 'Acquire::IndexTargets::deb::DEP-11::MetaKey=$(COMPONENT)/dep11/Components-$(NATIVE_ARCHITECTURE).yml'
+  -o 'Acquire::IndexTargets::deb::DEP-11::ShortDescription=Components-$(NATIVE_ARCHITECTURE)'
+  -o 'Acquire::IndexTargets::deb::DEP-11::Description=$(RELEASE)/$(COMPONENT) $(NATIVE_ARCHITECTURE) Components'
+  -o 'Acquire::IndexTargets::deb::DEP-11::KeepCompressed=true'
+  -o 'Acquire::IndexTargets::deb::DEP-11::KeepCompressedAs=gz'
+  -o 'Acquire::IndexTargets::deb::DEP-11::DefaultEnabled=true'
 )
 
 apt-get "${apt_options[@]}" update
