@@ -30,7 +30,7 @@ sudo apt install dockermon
 Alternatively, download the Debian package for the current release and install it directly:
 
 ```bash
-sudo apt install ./Dockermon_0.1.3_amd64.deb
+sudo apt install ./Dockermon_0.1.4_amd64.deb
 ```
 
 Dockermon requires a running Docker Engine, the Docker Compose plugin, and permission to access

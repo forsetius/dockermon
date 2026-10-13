@@ -67,6 +67,23 @@ else
   readonly generated_repository="${test_directory}/repository"
 fi
 
+readonly generated_dep11_metadata="${generated_repository}/dists/stable/main/dep11/Components-amd64.yml.gz"
+
+if [[ ! -f "${generated_dep11_metadata}" ]]; then
+  printf 'Generated DEP-11 metadata was not found: %s\n' "${generated_dep11_metadata}" >&2
+  exit 1
+fi
+
+readonly generated_dep11_header="$(
+  gzip -dc "${generated_dep11_metadata}" \
+    | awk 'NR == 1 { next } /^---$/ { exit } { print }'
+)"
+
+if ! grep -Fxq 'Origin: dockermon-stable-main' <<< "${generated_dep11_header}"; then
+  printf 'Generated DEP-11 metadata header does not identify its origin.\n' >&2
+  exit 1
+fi
+
 readonly apt_root="${test_directory}/apt"
 readonly apt_lists="${apt_root}/state/lists"
 readonly apt_archives="${apt_root}/cache/archives"

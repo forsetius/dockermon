@@ -45,7 +45,7 @@ sudo apt install dockermon
 Alternatively, install a downloaded Debian package directly:
 
 ```bash
-sudo apt install ./Dockermon_0.1.3_amd64.deb
+sudo apt install ./Dockermon_0.1.4_amd64.deb
 ```
 
 The same command updates an existing installation when the package file contains a newer version.
@@ -161,7 +161,7 @@ sudo apt install dockermon
 Możesz też bezpośrednio zainstalować pobrany pakiet Debiana:
 
 ```bash
-sudo apt install ./Dockermon_0.1.3_amd64.deb
+sudo apt install ./Dockermon_0.1.4_amd64.deb
 ```
 
 To samo polecenie zaktualizuje istniejącą instalację, jeśli plik zawiera nowszą wersję pakietu.
