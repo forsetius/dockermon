@@ -138,6 +138,11 @@ jobs:
       - name: Install native dependencies
         run: >-
           sudo apt-get update && sudo apt-get install -y
+          appstream
+          appstream-compose
+          apt-utils
+          desktop-file-utils
+          gnupg
           pkg-config
           libdbus-1-dev
           libwebkit2gtk-4.1-dev
@@ -146,6 +151,7 @@ jobs:
           patchelf
           libssl-dev
           libxdo-dev
+          xz-utils
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -167,7 +173,24 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build Debian package
-        run: pnpm tauri build --bundles deb
+        run: pnpm bundle:deb
+
+      - name: Validate Debian package
+        run: |
+          package_path="$(find src-tauri/target/release/bundle/deb -maxdepth 1 -type f -name '*.deb' -print -quit)"
+          package_root="${RUNNER_TEMP}/package-root"
+          test -n "${package_path}"
+          dpkg-deb --extract "${package_path}" "${package_root}"
+          appstreamcli validate --strict --pedantic --no-net \
+            "${package_root}/usr/share/metainfo/pl.forseti.dockermon.metainfo.xml"
+          desktop-file-validate \
+            "${package_root}/usr/share/applications/pl.forseti.dockermon.desktop"
+
+      - name: Test APT repository
+        run: |
+          package_path="$(find src-tauri/target/release/bundle/deb -maxdepth 1 -type f -name '*.deb' -print -quit)"
+          test -n "${package_path}"
+          ./scripts/test-apt-repository.sh "${package_path}"
 
       - name: Upload Debian package
         uses: actions/upload-artifact@v7

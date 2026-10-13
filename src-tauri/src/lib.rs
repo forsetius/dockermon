@@ -546,7 +546,8 @@ mod tests {
     #[cfg(all(debug_assertions, target_os = "linux"))]
     #[test]
     fn development_desktop_entry_matches_the_gtk_application_identifier() {
-        let identifier = "pl.forsetius.dockermon";
+        let context: tauri::Context<tauri::Wry> = tauri::generate_context!();
+        let identifier = &context.config().identifier;
         let path = development_desktop_entry_path(identifier)
             .expect("a desktop entry path should be available in the test environment");
         let contents = development_desktop_entry_contents(
@@ -557,10 +558,10 @@ mod tests {
 
         assert_eq!(
             path.file_name().and_then(|name| name.to_str()),
-            Some("pl.forsetius.dockermon.desktop")
+            Some("pl.forseti.dockermon.desktop")
         );
         assert!(contents.contains("Exec=\"/tmp/dockermon executable\""));
         assert!(contents.contains("Icon=/tmp/dockermon-icon.png"));
-        assert!(contents.contains("StartupWMClass=pl.forsetius.dockermon"));
+        assert!(contents.contains("StartupWMClass=pl.forseti.dockermon"));
     }
 }

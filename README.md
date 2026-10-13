@@ -3,9 +3,42 @@
 Dockermon is a focused desktop monitor for local Docker development projects on Linux,
 especially Zorin OS.
 
+See the [user guide](USER_GUIDE.md) for installation, first-run setup, everyday workflows,
+tray behavior, and troubleshooting.
+
 The desktop application monitors and controls the local Docker Engine through a production
 runtime. The browser build continues to use the deterministic test runtime so the complete
 interface can be developed without changing local Docker resources.
+
+## Installation
+
+Install Dockermon from its signed APT repository to receive future updates:
+
+```bash
+sudo install -d -m 0755 /etc/apt/keyrings
+curl -fsSLo /tmp/dockermon-archive-keyring.gpg \
+  https://apt.forseti.pl/dockermon-archive-keyring.gpg
+sudo install -m 0644 /tmp/dockermon-archive-keyring.gpg \
+  /etc/apt/keyrings/dockermon-archive-keyring.gpg
+curl -fsSLo /tmp/dockermon.sources https://apt.forseti.pl/dockermon.sources
+sudo install -m 0644 /tmp/dockermon.sources \
+  /etc/apt/sources.list.d/dockermon.sources
+sudo apt update
+sudo apt install dockermon
+```
+
+Alternatively, download the Debian package for the current release and install it directly:
+
+```bash
+sudo apt install ./Dockermon_0.1.3_amd64.deb
+```
+
+Dockermon requires a running Docker Engine, the Docker Compose plugin, and permission to access
+the local Docker socket. See the [user guide](USER_GUIDE.md#requirements) for setup and
+verification steps.
+
+Repository setup, signing, publishing, and validation are documented in
+[`docs/APT_REPOSITORY.md`](docs/APT_REPOSITORY.md).
 
 ## Prerequisites on Zorin OS 18
 
@@ -41,6 +74,14 @@ pnpm tauri dev
 ```
 
 Run the frontend without the desktop shell with `pnpm dev`.
+
+Build the Debian package and normalize its desktop integration files with:
+
+```bash
+pnpm bundle:deb
+```
+
+The package is written to `src-tauri/target/release/bundle/deb/`.
 
 Run the destructive Docker integration scenarios only through the isolated smoke-test runner:
 

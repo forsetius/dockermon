@@ -8,3 +8,5 @@ src-tauri/gen/schemas/
 *.log
 /commit.txt
 /pr.md
+/_release/
+/_site/

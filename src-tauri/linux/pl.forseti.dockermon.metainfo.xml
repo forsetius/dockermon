@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>pl.forseti.dockermon</id>
+  <name>Dockermon</name>
+  <pkgname>dockermon</pkgname>
+  <summary>Monitor local Docker development projects</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>LicenseRef-Apache-2.0-with-Commons-Clause-1.0</project_license>
+  <developer id="pl.forseti">
+    <name>Marcin 'Forseti' Paździora</name>
+  </developer>
+  <description>
+    <p>
+      Dockermon monitors and controls local Docker development projects from a focused Linux
+      desktop interface. It connects directly to the local Docker Engine and keeps project state,
+      service actions, resource usage, ports, and logs available without replacing Docker Compose
+      workflows.
+    </p>
+  </description>
+  <launchable type="desktop-id">pl.forseti.dockermon.desktop</launchable>
+  <provides>
+    <binary>dockermon</binary>
+  </provides>
+  <categories>
+    <category>Development</category>
+    <category>Utility</category>
+  </categories>
+  <url type="homepage">https://github.com/forsetius/dockermon</url>
+  <url type="bugtracker">https://github.com/forsetius/dockermon/issues</url>
+  <url type="help">https://github.com/forsetius/dockermon/blob/master/USER_GUIDE.md</url>
+  <url type="vcs-browser">https://github.com/forsetius/dockermon</url>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.1.3" date="2026-10-13">
+      <description>
+        <p>First public release of Dockermon.</p>
+      </description>
+    </release>
+  </releases>
+</component>
