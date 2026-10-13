@@ -1,0 +1,218 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  PNPM_VERSION: 11.28.2
+  RUST_TOOLCHAIN: 1.99.0
+
+jobs:
+  package:
+    name: Build Debian package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Install native dependencies
+        run: >-
+          sudo apt-get update && sudo apt-get install -y
+          appstream
+          desktop-file-utils
+          pkg-config
+          libdbus-1-dev
+          libwebkit2gtk-4.1-dev
+          libayatana-appindicator3-dev
+          librsvg2-dev
+          patchelf
+          libssl-dev
+          libxdo-dev
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+
+      - name: Install JavaScript dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify release tag
+        run: |
+          if [[ ! "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            printf 'Tag does not use the required vMAJOR.MINOR.PATCH format: %s\n' \
+              "${GITHUB_REF_NAME}" >&2
+            exit 1
+          fi
+          package_version="$(node --print "require('./package.json').version")"
+          expected_tag="v${package_version}"
+          if [[ "${GITHUB_REF_NAME}" != "${expected_tag}" ]]; then
+            printf 'Tag %s does not match package version %s.\n' \
+              "${GITHUB_REF_NAME}" "${package_version}" >&2
+            exit 1
+          fi
+          git fetch --no-tags origin master:refs/remotes/origin/master
+          if ! git merge-base --is-ancestor "${GITHUB_SHA}" origin/master; then
+            printf 'Release tag must point to a commit contained in origin/master.\n' >&2
+            exit 1
+          fi
+
+      - name: Build Debian package
+        run: pnpm bundle:deb
+
+      - name: Validate Debian package
+        run: |
+          package_path="$(find src-tauri/target/release/bundle/deb -maxdepth 1 -type f -name '*.deb' -print -quit)"
+          package_root="${RUNNER_TEMP}/package-root"
+          test -n "${package_path}"
+          dpkg-deb --extract "${package_path}" "${package_root}"
+          appstreamcli validate --strict --pedantic --no-net \
+            "${package_root}/usr/share/metainfo/pl.forseti.dockermon.metainfo.xml"
+          desktop-file-validate \
+            "${package_root}/usr/share/applications/pl.forseti.dockermon.desktop"
+
+      - name: Upload Debian package
+        uses: actions/upload-artifact@v7
+        with:
+          name: dockermon-deb-${{ github.sha }}
+          path: src-tauri/target/release/bundle/deb/*.deb
+          if-no-files-found: error
+
+  apt-repository:
+    name: Prepare APT repository
+    needs: package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: release-signing
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Install repository tools
+        run: >-
+          sudo apt-get update && sudo apt-get install -y
+          appstream
+          appstream-compose
+          apt-utils
+          gnupg
+          xz-utils
+
+      - name: Download Debian package
+        uses: actions/download-artifact@v7
+        with:
+          name: dockermon-deb-${{ github.sha }}
+          path: _release
+
+      - name: Import repository signing key
+        env:
+          APT_SIGNING_PRIVATE_KEY: ${{ secrets.APT_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [[ -z "${APT_SIGNING_PRIVATE_KEY}" ]]; then
+            printf 'GitHub secret APT_SIGNING_PRIVATE_KEY is not configured.\n' >&2
+            exit 1
+          fi
+          export GNUPGHOME="${RUNNER_TEMP}/gnupg"
+          mkdir -m 0700 "${GNUPGHOME}"
+          printf '%s' "${APT_SIGNING_PRIVATE_KEY}" > "${RUNNER_TEMP}/dockermon-apt-private.asc"
+          gpg --batch --import "${RUNNER_TEMP}/dockermon-apt-private.asc"
+          fingerprint="$(
+            gpg --batch --with-colons --list-secret-keys --fingerprint \
+              | awk -F: '$1 == "fpr" { print $10; exit }'
+          )"
+          if [[ -z "${fingerprint}" ]]; then
+            printf 'Could not determine the imported signing key fingerprint.\n' >&2
+            exit 1
+          fi
+          printf 'GNUPGHOME=%s\n' "${GNUPGHOME}" >> "${GITHUB_ENV}"
+          printf 'APT_SIGNING_KEY_FINGERPRINT=%s\n' "${fingerprint}" >> "${GITHUB_ENV}"
+
+      - name: Build signed APT repository
+        env:
+          APT_REPOSITORY_URL: https://apt.forseti.pl
+          APT_SIGNING_KEY_PASSPHRASE: ${{ secrets.APT_SIGNING_KEY_PASSPHRASE }}
+        run: |
+          if [[ -z "${APT_SIGNING_KEY_PASSPHRASE}" ]]; then
+            printf 'GitHub secret APT_SIGNING_KEY_PASSPHRASE is not configured.\n' >&2
+            exit 1
+          fi
+          package_path="$(find _release -maxdepth 1 -type f -name '*.deb' -print -quit)"
+          test -n "${package_path}"
+          ./scripts/build-apt-repository.sh "${package_path}" _site
+          ./scripts/test-apt-repository.sh "${package_path}" _site
+
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+  github-release:
+    name: Publish GitHub release
+    needs: [package, apt-repository]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Download Debian package
+        uses: actions/download-artifact@v7
+        with:
+          name: dockermon-deb-${{ github.sha }}
+          path: _release
+
+      - name: Create or update GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          package_path="$(find _release -maxdepth 1 -type f -name '*.deb' -print -quit)"
+          test -n "${package_path}"
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release upload "${GITHUB_REF_NAME}" "${package_path}" --clobber
+          else
+            gh release create \
+              "${GITHUB_REF_NAME}" \
+              "${package_path}" \
+              --generate-notes \
+              --title "Dockermon ${GITHUB_REF_NAME#v}" \
+              --verify-tag
+          fi
+
+  deploy-pages:
+    name: Publish APT repository
+    needs: [apt-repository, github-release]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

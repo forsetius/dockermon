@@ -1,0 +1,29 @@
+services:
+  worker:
+    image: alpine:3.21
+    command:
+      - /bin/sh
+      - -c
+      - |
+        trap 'exit 0' TERM INT
+        while true; do
+          sleep 1
+        done
+    volumes:
+      - state:/state
+
+  logger:
+    image: alpine:3.21
+    command:
+      - /bin/sh
+      - -c
+      - |
+        counter=0
+        while true; do
+          counter=$$((counter + 1))
+          printf '\033[32mINFO\033[0m live-%s\n' "$$counter"
+          sleep 0.2
+        done
+
+volumes:
+  state:

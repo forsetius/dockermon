@@ -356,9 +356,10 @@ fn append_service_action<R: Runtime>(
 
 fn service_action(status: ServiceStatus) -> ServiceAction {
     match status {
-        ServiceStatus::NotCreated | ServiceStatus::Stopped | ServiceStatus::Error => {
-            ServiceAction::Start
-        }
+        ServiceStatus::Unknown
+        | ServiceStatus::NotCreated
+        | ServiceStatus::Stopped
+        | ServiceStatus::Error => ServiceAction::Start,
         ServiceStatus::Starting | ServiceStatus::Running | ServiceStatus::Healthy => {
             ServiceAction::Stop
         }
@@ -690,6 +691,7 @@ mod tests {
 
     #[test]
     fn tray_assigns_exactly_one_action_to_each_service_status() {
+        assert_eq!(service_action(ServiceStatus::Unknown), ServiceAction::Start);
         assert_eq!(
             service_action(ServiceStatus::NotCreated),
             ServiceAction::Start

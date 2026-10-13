@@ -26,6 +26,50 @@ fn autostart_registration() -> AutoLaunch {
     )
 }
 
+fn autostart_desktop_entry_path() -> Result<std::path::PathBuf, std::io::Error> {
+    let home = std::env::var_os("HOME")
+        .filter(|path| !path.is_empty())
+        .map(std::path::PathBuf::from)
+        .ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "HOME is unavailable for the autostart entry",
+            )
+        })?;
+    Ok(home
+        .join(".config")
+        .join("autostart")
+        .join(format!("{AUTOSTART_APPLICATION_NAME}.desktop")))
+}
+
+fn autostart_entry_with_try_exec(contents: &str) -> String {
+    let try_exec = format!("TryExec={INSTALLED_EXECUTABLE_PATH}");
+    let mut lines = Vec::new();
+    let mut inserted = false;
+
+    for line in contents.lines() {
+        if line.starts_with("TryExec=") {
+            continue;
+        }
+        lines.push(line.to_owned());
+        if line.starts_with("Exec=") {
+            lines.push(try_exec.clone());
+            inserted = true;
+        }
+    }
+    if !inserted {
+        lines.push(try_exec);
+    }
+
+    format!("{}\n", lines.join("\n"))
+}
+
+fn install_autostart_try_exec() -> Result<(), std::io::Error> {
+    let path = autostart_desktop_entry_path()?;
+    let contents = std::fs::read_to_string(&path)?;
+    std::fs::write(path, autostart_entry_with_try_exec(&contents))
+}
+
 fn arguments_request_hidden_start<I, S>(arguments: I) -> bool
 where
     I: IntoIterator<Item = S>,
@@ -251,12 +295,20 @@ async fn set_language(
 
 fn update_autostart_registration(enabled: bool) -> Result<(), RuntimeError> {
     let registration = autostart_registration();
-    let result = if enabled {
-        registration.enable()
+    if enabled {
+        registration
+            .enable()
+            .map_err(|_| RuntimeError::new("AUTOSTART_UPDATE_FAILED", true))?;
+        if install_autostart_try_exec().is_err() {
+            let _ = registration.disable();
+            return Err(RuntimeError::new("AUTOSTART_UPDATE_FAILED", true));
+        }
+        Ok(())
     } else {
-        registration.disable()
-    };
-    result.map_err(|_| RuntimeError::new("AUTOSTART_UPDATE_FAILED", true))
+        registration
+            .disable()
+            .map_err(|_| RuntimeError::new("AUTOSTART_UPDATE_FAILED", true))
+    }
 }
 
 #[tauri::command]
@@ -390,10 +442,13 @@ pub fn run() {
             let autostart_registration = autostart_registration();
             let registered_autostart = autostart_registration.is_enabled().ok();
             if registered_autostart == Some(true) {
-                match autostart_registration.enable() {
+                match update_autostart_registration(true) {
                     Ok(()) => {}
                     Err(error) => {
-                        eprintln!("failed to refresh the autostart registration: {error}");
+                        eprintln!(
+                            "failed to refresh the autostart registration: {}",
+                            error.code
+                        );
                     }
                 }
             }
@@ -449,7 +504,7 @@ pub fn run() {
 mod tests {
     use super::{
         AUTOSTART_APPLICATION_NAME, AUTOSTART_ARGUMENT, INSTALLED_EXECUTABLE_PATH,
-        arguments_request_hidden_start, autostart_registration,
+        arguments_request_hidden_start, autostart_entry_with_try_exec, autostart_registration,
     };
     #[cfg(all(debug_assertions, target_os = "linux"))]
     use super::{development_desktop_entry_contents, development_desktop_entry_path};
@@ -477,10 +532,22 @@ mod tests {
         assert_eq!(registration.get_args(), &[AUTOSTART_ARGUMENT]);
     }
 
+    #[test]
+    fn autostart_entry_skips_launch_when_the_deb_executable_is_missing() {
+        let contents = autostart_entry_with_try_exec(
+            "[Desktop Entry]\nType=Application\nExec=/usr/bin/dockermon --autostart\nTerminal=false",
+        );
+
+        assert!(contents.contains("Exec=/usr/bin/dockermon --autostart\n"));
+        assert!(contents.contains("TryExec=/usr/bin/dockermon\n"));
+        assert_eq!(contents.matches("TryExec=").count(), 1);
+    }
+
     #[cfg(all(debug_assertions, target_os = "linux"))]
     #[test]
     fn development_desktop_entry_matches_the_gtk_application_identifier() {
-        let identifier = "pl.forsetius.dockermon";
+        let context: tauri::Context<tauri::Wry> = tauri::generate_context!();
+        let identifier = &context.config().identifier;
         let path = development_desktop_entry_path(identifier)
             .expect("a desktop entry path should be available in the test environment");
         let contents = development_desktop_entry_contents(
@@ -491,10 +558,10 @@ mod tests {
 
         assert_eq!(
             path.file_name().and_then(|name| name.to_str()),
-            Some("pl.forsetius.dockermon.desktop")
+            Some("pl.forseti.dockermon.desktop")
         );
         assert!(contents.contains("Exec=\"/tmp/dockermon executable\""));
         assert!(contents.contains("Icon=/tmp/dockermon-icon.png"));
-        assert!(contents.contains("StartupWMClass=pl.forsetius.dockermon"));
+        assert!(contents.contains("StartupWMClass=pl.forseti.dockermon"));
     }
 }
